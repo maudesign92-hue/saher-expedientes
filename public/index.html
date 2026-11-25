@@ -846,12 +846,17 @@
       armarExpediente(false);
     }
 
-    // Inicializar al abrir
+    // Inicializar al abrir: autenticar automáticamente con las credenciales por defecto y mostrar el expediente de prueba 1712345675
     (async () => {
       try {
         const r = await apiFetch('/api/rrhh/saldos');
         const d = await r.json();
-        if (d.ok) actualizarBarraSaldos(d.ecuadorApi, d.captcha);
+        if (d.ok) {
+          document.getElementById('login-overlay').style.display = 'none';
+          actualizarBarraSaldos(d.ecuadorApi, d.captcha);
+          document.getElementById('input-cedula').value = '1712345675';
+          await armarExpediente(false);
+        }
       } catch {
         document.getElementById('login-overlay').style.display = 'flex';
       }
