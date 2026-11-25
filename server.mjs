@@ -457,13 +457,17 @@ export async function handleRequest(req, res) {
           validarYGuardarArchivosSubidos(cedula, body.archivos);
         }
 
-        // Si pidió descargar certificados de portales automáticamente con 2Captcha/CapSolver
+        // Por defecto los Agentes IA buscan y generan automáticamente los 5 certificados oficiales
+        const ejecutarAgentes = body.descargarConCaptcha !== false;
         let descargaPortales = null;
-        if (body.descargarConCaptcha) {
+        if (ejecutarAgentes) {
           descargaPortales = await descargarCertificadosOficiales({
             cedula,
+            nombre_completo: idRes.postulante.nombre_completo,
             fecha_nacimiento: idRes.postulante.fecha_nacimiento,
+            estado_civil: idRes.postulante.estado_civil,
             carpetaEntrada: path.join(DATA_DIR, 'entrada', cedula),
+            forzarRegeneracion: !!body.forzarAgentes,
           });
         }
 
@@ -492,6 +496,14 @@ export async function handleRequest(req, res) {
           guardarUltimoExpediente(cedula, exp);
         }
 
+        let pdfBase64 = null;
+        if (exp?.archivo_pdf) {
+          const rutaPdfGenerado = path.join(DATA_DIR, 'salida', exp.archivo_pdf);
+          if (fs.existsSync(rutaPdfGenerado)) {
+            pdfBase64 = fs.readFileSync(rutaPdfGenerado).toString('base64');
+          }
+        }
+
         const [ecuadorApi, captcha] = await Promise.all([
           consultarSaldoEcuadorApi(),
           consultarSaldoCaptcha(),
@@ -501,6 +513,7 @@ export async function handleRequest(req, res) {
           ok: true,
           identidad: exp?.identidad,
           expediente: exp,
+          pdfBase64,
           descargaPortales,
           saldos: { ecuadorApi, captcha },
         });
@@ -554,9 +567,11 @@ export async function handleRequest(req, res) {
           return responderJson(res, 404, { ok: false, error: 'PDF no encontrado para esta cédula.' });
         }
         const nombreDescarga = path.basename(rutaPdf);
+        const esInline = urlObj.searchParams.get('inline') === '1';
         res.writeHead(200, {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="${nombreDescarga}"`,
+          'Content-Disposition': `${esInline ? 'inline' : 'attachment'}; filename="${nombreDescarga}"`,
+          'Cache-Control': 'no-store',
         });
         fs.createReadStream(rutaPdf).pipe(res);
         return;

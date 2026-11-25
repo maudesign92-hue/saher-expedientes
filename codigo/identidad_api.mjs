@@ -276,7 +276,10 @@ export async function obtenerIdentidadPorCedula(cedulaRaw, dataDir) {
       nombres = partes.slice(2).join(' ');
     }
     const fecha_nacimiento = normalizarFechaNacimiento(payload.fecha_nacimiento || payload.fechaNacimiento || payload.birth_date || '');
-    const estado_civil = String(payload.estado_civil || payload.estadoCivil || payload.marital_status || '').trim().toUpperCase();
+    const lugar_nacimiento = String(payload.birth_place || payload.lugar_nacimiento || '').trim().toUpperCase();
+    const edad = payload.age ? `${payload.age} AÑOS` : '';
+    const genero = payload.gender === 'male' ? 'MASCULINO' : payload.gender === 'female' ? 'FEMENINO' : String(payload.gender || '').toUpperCase();
+    const estado_civil = String(payload.estado_civil || payload.estadoCivil || payload.marital_status || (lugar_nacimiento ? `${genero} · ${lugar_nacimiento}` : genero) || 'VERIFICADO').trim().toUpperCase();
 
     const guardado = guardarPostulanteEnCsv(dataDir, {
       cedula,
@@ -298,6 +301,9 @@ export async function obtenerIdentidadPorCedula(cedulaRaw, dataDir) {
         nombre_completo: [guardado.apellidos, guardado.nombres].filter(Boolean).join(' '),
         fecha_nacimiento: guardado.fecha_nacimiento,
         estado_civil: guardado.estado_civil || '—',
+        lugar_nacimiento,
+        edad,
+        genero,
       },
     };
   } catch (err) {

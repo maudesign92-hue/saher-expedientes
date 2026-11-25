@@ -383,16 +383,17 @@
       <div class="card">
         <div class="form-row">
           <div class="field">
-            <label for="input-cedula">Número de cédula (10 dígitos)</label>
-            <input type="text" id="input-cedula" maxlength="10" placeholder="Ej. 1712345675 o 1804625752" />
+            <label for="input-cedula">🔍 Buscador de Expediente por Número de Cédula (10 dígitos)</label>
+            <input type="text" id="input-cedula" maxlength="10" placeholder="Escribe la cédula y presiona Enter (ej. 1804625752)" onkeydown="if(event.key==='Enter') armarExpediente(true, true)" style="font-size:1.15rem;font-weight:700;" />
           </div>
-          <button class="btn" id="btn-armar" onclick="armarExpediente(false)">
-            Armar expediente
+          <button class="btn btn-captcha" id="btn-armar-captcha" onclick="armarExpediente(true, true)" style="padding:12px 22px;font-size:1.02rem;">
+            🔍 Buscar Cédula y Desplegar PDF Único
           </button>
-          <button class="btn btn-captcha" id="btn-armar-captcha" onclick="armarExpediente(true)" title="Usa Playwright + 2Captcha/CapSolver para descargar certificados de los portales oficiales">
-            🤖 Descargar certificados con Captcha y armar
+          <button class="btn btn-sec" id="btn-armar" onclick="armarExpediente(false, false)" title="Solo valida los archivos subidos manualmente">
+            Validar archivos manuales
           </button>
         </div>
+        <div id="bitacora-agentes" style="display:none;margin-top:14px;background:#0f2942;color:#e2e8f0;padding:12px 16px;border-radius:8px;font-family:monospace;font-size:0.84rem;line-height:1.6;"></div>
 
         <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
           <strong>Subir archivos del postulante (PDF, JPG o PNG — máx. 10 MB c/u)</strong>
@@ -439,6 +440,15 @@
           <div class="tot-card tot-completo" id="res-tot-completo">0 completos</div>
           <div class="tot-card tot-observacion" id="res-tot-obs">0 con observación</div>
           <div class="tot-card tot-pendiente" id="res-tot-pend">0 pendientes</div>
+        </div>
+
+        <!-- VISOR EN VIVO DEL PDF ÚNICO CON TODOS LOS CERTIFICADOS -->
+        <div style="margin: 18px 0; border: 2px solid var(--primary); border-radius: 10px; overflow: hidden; background: #1e293b;">
+          <div style="background: var(--primary); color: #fff; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;">
+            <strong>📄 Expediente Completo Unificado (Todos los certificados en 1 solo PDF)</strong>
+            <a class="btn btn-sm" style="background:#1e6b3a;" id="btn-abrir-pdf-pestana" href="#" target="_blank">Abrir PDF en pantalla completa ↗</a>
+          </div>
+          <iframe id="visor-pdf-unico" src="about:blank" style="width: 100%; height: 760px; border: none; background: #fff;"></iframe>
         </div>
 
         <table>
@@ -661,7 +671,7 @@
       });
     }
 
-    async function armarExpediente(descargarConCaptcha = false) {
+    async function armarExpediente(descargarConCaptcha = true, forzarAgentes = false) {
       mostrarError('');
       const cedula = document.getElementById('input-cedula').value.trim();
       const errCedula = validarCedulaFrontend(cedula);
@@ -672,9 +682,15 @@
 
       const btn1 = document.getElementById('btn-armar');
       const btn2 = document.getElementById('btn-armar-captcha');
+      const bitacoraEl = document.getElementById('bitacora-agentes');
       btn1.disabled = true;
       btn2.disabled = true;
-      btn1.textContent = descargarConCaptcha ? 'Descargando con Captcha y armando...' : 'Armando expediente...';
+      btn2.textContent = descargarConCaptcha ? '🤖 Agentes IA buscando en portales...' : 'Armando...';
+
+      if (descargarConCaptcha) {
+        bitacoraEl.style.display = 'block';
+        bitacoraEl.innerHTML = `<div>🧠 Iniciando enjambre de Agentes IA para cédula <b>${cedula}</b> (EcuadorAPI + e-SATJE + MIDENA + Min. Interior + Min. Trabajo + 2Captcha)...</div>`;
+      }
 
       try {
         const archivosPayload = [];
@@ -689,6 +705,7 @@
             cedula,
             archivos: archivosPayload,
             descargarConCaptcha,
+            forzarAgentes,
           }),
         });
         const data = await resp.json();
@@ -697,16 +714,21 @@
           return;
         }
 
+        if (data.descargaPortales?.bitacora) {
+          bitacoraEl.style.display = 'block';
+          bitacoraEl.innerHTML = data.descargaPortales.bitacora.map(l => `<div>${l}</div>`).join('');
+        }
+
         archivosSeleccionados = [];
         renderizarArchivosSeleccionados();
         if (data.saldos) actualizarBarraSaldos(data.saldos.ecuadorApi, data.saldos.captcha);
-        mostrarResultadoExpediente(data.expediente, data.identidad);
+        mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
       } catch (err) {
         mostrarError(err.message);
       } finally {
         btn1.disabled = false;
         btn2.disabled = false;
-        btn1.textContent = 'Armar expediente';
+        btn2.textContent = '🔍 Buscar Cédula y Desplegar PDF Único';
       }
     }
 
@@ -717,7 +739,9 @@
       setTimeout(() => { btnEl.textContent = orig; }, 1400);
     }
 
-    function mostrarResultadoExpediente(exp, identidad) {
+    let ultimoBlobUrl = null;
+
+    function mostrarResultadoExpediente(exp, identidad, pdfBase64 = null) {
       expedienteActual = exp;
       const card = document.getElementById('resultado-card');
       card.style.display = 'block';
@@ -738,7 +762,26 @@
       document.getElementById('res-tot-obs').textContent = `${exp.totales['observación']} con observación`;
       document.getElementById('res-tot-pend').textContent = `${exp.totales.pendiente} pendientes`;
 
-      document.getElementById('btn-descargar-pdf').href = `${API_BASE}/api/rrhh/pdf/${cedula}`;
+      const ts = Date.now();
+      let urlPdf = `${API_BASE}/api/rrhh/pdf/${cedula}?inline=1&t=${ts}`;
+      let urlDescarga = `${API_BASE}/api/rrhh/pdf/${cedula}?t=${ts}`;
+
+      if (pdfBase64) {
+        if (ultimoBlobUrl) URL.revokeObjectURL(ultimoBlobUrl);
+        const binStr = atob(pdfBase64);
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        ultimoBlobUrl = URL.createObjectURL(blob);
+        urlPdf = ultimoBlobUrl;
+        urlDescarga = ultimoBlobUrl;
+      }
+
+      const btnDesc = document.getElementById('btn-descargar-pdf');
+      btnDesc.href = urlDescarga;
+      btnDesc.download = exp.archivo_pdf || `${cedula}_EXPEDIENTE_SAHER.pdf`;
+      document.getElementById('btn-abrir-pdf-pestana').href = urlPdf;
+      document.getElementById('visor-pdf-unico').src = `${urlPdf}#view=FitH`;
 
       const tbody = document.getElementById('res-tabla-docs');
       tbody.innerHTML = exp.slots.map(s => {
@@ -854,8 +897,8 @@
         if (d.ok) {
           document.getElementById('login-overlay').style.display = 'none';
           actualizarBarraSaldos(d.ecuadorApi, d.captcha);
-          document.getElementById('input-cedula').value = '1712345675';
-          await armarExpediente(false);
+          document.getElementById('input-cedula').value = '1804625752';
+          await armarExpediente(true, true);
         }
       } catch {
         document.getElementById('login-overlay').style.display = 'flex';
