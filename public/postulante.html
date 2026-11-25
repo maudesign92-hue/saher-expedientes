@@ -6,58 +6,73 @@
   <title>SAHER — Subida de Certificados del Postulante</title>
   <style>
     :root {
-      --primary: #0f2942;
-      --bg: #f4f6f9;
+      --saher-black: #0b0b0d;
+      --saher-red: #c8102e;
+      --saher-gold: #d4af37;
+      --bg: #f4f4f6;
       --card: #ffffff;
-      --text: #1d232b;
-      --muted: #5b6470;
-      --border: #d7dbe0;
-      --ok-bg: #e3f2e8;
-      --ok-txt: #1e6b3a;
-      --obs-bg: #fdf0d9;
+      --text: #141417;
+      --muted: #5a5d65;
+      --border: #dcdce2;
+      --ok-bg: #e6f4ea;
+      --ok-txt: #137333;
+      --obs-bg: #fef7e0;
       --obs-txt: #8a5a00;
-      --pend-bg: #fbe3e1;
-      --pend-txt: #9b2c22;
+      --pend-bg: #fce8e6;
+      --pend-txt: #b31412;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-family: "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.45;
     }
     header {
-      background: var(--primary);
+      background: linear-gradient(125deg, #09090b 0%, #151519 60%, #7a091b 100%);
       color: #fff;
-      padding: 16px;
+      padding: 18px 16px;
       text-align: center;
+      border-bottom: 4px solid var(--saher-gold);
     }
     header h1 {
       margin: 0;
-      font-size: 1.15rem;
+      font-size: 1.4rem;
+      color: var(--saher-red);
+      letter-spacing: 0.12em;
+      font-weight: 900;
+    }
+    header .sub-gold {
+      font-size: 0.75rem;
+      color: var(--saher-gold);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
     header p {
-      margin: 4px 0 0;
-      font-size: 0.85rem;
-      color: #cbd5e1;
+      margin: 6px 0 0;
+      font-size: 0.88rem;
+      color: #e2e8f0;
+      font-weight: 600;
     }
     .container {
-      max-width: 600px;
+      max-width: 620px;
       margin: 16px auto;
       padding: 0 14px 32px;
     }
     .card {
       background: var(--card);
       border: 1px solid var(--border);
+      border-top: 3px solid var(--saher-black);
       border-radius: 10px;
       padding: 16px;
       margin-bottom: 14px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
     .lopdp-box {
-      background: #f8fafc;
-      border: 1px solid #cbd5e1;
+      background: #fffdf7;
+      border: 1.5px solid var(--saher-gold);
       border-radius: 8px;
       padding: 12px;
       font-size: 0.86rem;
@@ -67,7 +82,7 @@
       gap: 10px;
       align-items: flex-start;
       margin-top: 10px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
     }
     .lopdp-check input {
@@ -81,14 +96,14 @@
       gap: 8px;
     }
     .cert-title {
-      font-weight: 700;
+      font-weight: 800;
       font-size: 1rem;
     }
     .badge {
       padding: 3px 9px;
       border-radius: 12px;
       font-size: 0.76rem;
-      font-weight: 700;
+      font-weight: 800;
       text-transform: uppercase;
       white-space: nowrap;
     }
@@ -126,13 +141,13 @@
       gap: 8px;
     }
     .btn {
-      background: var(--primary);
+      background: var(--saher-red);
       color: #fff;
       border: none;
       border-radius: 7px;
       padding: 9px 14px;
       font-size: 0.88rem;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       text-decoration: none;
       display: inline-flex;
@@ -140,16 +155,17 @@
       gap: 6px;
     }
     .btn-sec {
-      background: #fff;
-      color: var(--primary);
-      border: 1px solid var(--primary);
+      background: var(--saher-black);
+      color: var(--saher-gold);
+      border: 1px solid var(--saher-gold);
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>SAHER SEGURIDAD PRIVADA</h1>
-    <p id="sub-postulante">Recepción de certificados del postulante</p>
+    <h1>SAHER</h1>
+    <div class="sub-gold">CENTRO DE CAPACITACIÓN · GUARDIAS DE SEGURIDAD PRIVADA</div>
+    <p id="sub-postulante">Recepción de certificados oficiales del postulante</p>
   </header>
 
   <div class="container" id="main-container">
@@ -175,33 +191,39 @@
     const CERTIFICADOS = [
       {
         clave: 'antecedentes',
-        titulo: '1. Antecedentes penales',
+        titulo: '1. Antecedentes penales (Ministerio del Interior)',
         url: 'https://certificados.ministeriodelinterior.gob.ec/gestorcertificados/antecedentes/',
         instruccion: 'Ingresa tu cédula, escribe el motivo "Proceso de reclutamiento de personal" y descarga el PDF.',
       },
       {
         clave: 'judiciales',
-        titulo: '2. Procesos judiciales',
+        titulo: '2. Procesos judiciales (Función Judicial e-SATJE)',
         url: 'https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros',
         instruccion: 'Escribe tu cédula en "Demandado / Procesado", pulsa BUSCAR e imprime el resultado como PDF.',
       },
       {
         clave: 'no_ffaa',
-        titulo: '3. No pertenecer a las FF. AA.',
+        titulo: '3. No pertenecer a las FF. AA. (MIDENA)',
         url: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
         instruccion: 'Ingresa tu cédula y el texto de seguridad de la imagen para descargar el certificado PDF.',
       },
       {
         clave: 'clts',
-        titulo: '4. Liquidación de tiempo de servicio',
+        titulo: '4. Liquidación de tiempo de servicio (MIDENA)',
         url: 'https://sidehu.midena.gob.ec/certificados/clts.action',
         instruccion: 'Ingresa tu cédula, el texto de seguridad y responde la pregunta personal para guardar el PDF.',
       },
       {
         clave: 'servidor_publico',
-        titulo: '5. Servidor público (dependencia laboral)',
+        titulo: '5. Servidor público / Dependencia laboral (Min. Trabajo)',
         url: 'https://calculadoras.trabajo.gob.ec/dependencia',
         instruccion: 'Ingresa tu cédula y tu fecha de nacimiento (DD/MM/AAAA), resuelve el captcha y descarga el PDF.',
+      },
+      {
+        clave: 'titulo_bachiller',
+        titulo: '6. Título de bachiller (Ministerio de Educación)',
+        url: 'https://servicios.educacion.gob.ec/titulacion25-web/faces/paginas/consulta-titulos-refrendados.xhtml',
+        instruccion: 'Ingresa tu cédula y el código de la imagen para descargar o imprimir tu consulta de título en PDF.',
       },
     ];
 
@@ -256,7 +278,7 @@
               <a class="btn btn-sec" href="${c.url}" target="_blank" rel="noopener">1. Abrir portal oficial</a>
               <label class="btn">
                 2. ${esCompleto ? 'Subir otro PDF' : 'Subir PDF'}
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="subirCertificado('${c.clave}', this)" />
+                <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="subirCertificado('${c.clave}', this)" />
               </label>
             </div>
           </div>

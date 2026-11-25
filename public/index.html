@@ -3,54 +3,91 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SAHER — Expedientes de Postulantes a Guardia (RR. HH.)</title>
+  <title>SAHER — Sistema de Expedientes y Certificados para Guardias</title>
   <style>
     :root {
-      --bg: #f4f6f9;
-      --card: #ffffff;
-      --text: #1d232b;
-      --muted: #5b6470;
-      --border: #d7dbe0;
-      --primary: #0f2942;
-      --primary-hover: #183d61;
-      --accent: #b8860b;
-      --ok-bg: #e3f2e8;
-      --ok-txt: #1e6b3a;
-      --obs-bg: #fdf0d9;
+      --saher-black: #0b0b0d;
+      --saher-dark: #16161a;
+      --saher-red: #c8102e;
+      --saher-red-hover: #a50b24;
+      --saher-gold: #d4af37;
+      --saher-gold-light: #f3e5ab;
+      --saher-white: #ffffff;
+      --bg: #f4f4f6;
+      --text: #141417;
+      --muted: #5a5d65;
+      --border: #dcdce2;
+      --ok-bg: #e6f4ea;
+      --ok-txt: #137333;
+      --obs-bg: #fef7e0;
       --obs-txt: #8a5a00;
-      --pend-bg: #fbe3e1;
-      --pend-txt: #9b2c22;
+      --pend-bg: #fce8e6;
+      --pend-txt: #b31412;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-family: "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.45;
     }
+    /* CABECERA OFICIAL SAHER: NEGRO, ROJO, DORADO Y BLANCO */
     header {
-      background: var(--primary);
-      color: #fff;
-      padding: 14px 24px;
+      background:
+        linear-gradient(125deg, #09090b 0%, #151519 60%, #7a091b 100%);
+      color: var(--saher-white);
+      padding: 18px 28px;
+      border-bottom: 4px solid var(--saher-gold);
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      position: relative;
     }
-    .brand {
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .eagle-badge {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #1e1e24 0%, #09090b 100%);
+      border: 2px solid var(--saher-gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 12px rgba(212, 175, 55, 0.35);
+      flex-shrink: 0;
+    }
+    .brand-title {
       display: flex;
       flex-direction: column;
     }
-    .brand h1 {
-      margin: 0;
-      font-size: 1.25rem;
-      letter-spacing: 0.03em;
+    .brand-title .saher-word {
+      font-size: 1.85rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      color: var(--saher-red);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+      line-height: 1;
     }
-    .brand span {
-      font-size: 0.82rem;
-      color: #cbd5e1;
+    .brand-title .saher-sub {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      color: var(--saher-gold);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .brand-title .saher-tag {
+      font-size: 0.75rem;
+      color: #d1d5db;
+      font-style: italic;
     }
     .saldos-bar {
       display: flex;
@@ -59,50 +96,59 @@
       align-items: center;
     }
     .pill-saldo {
-      background: rgba(255, 255, 255, 0.12);
-      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(11, 11, 13, 0.78);
+      border: 1px solid var(--saher-gold);
+      color: var(--saher-white);
       border-radius: 8px;
-      padding: 6px 12px;
+      padding: 7px 13px;
       font-size: 0.82rem;
+      font-weight: 600;
     }
     .pill-saldo.alerta {
-      background: #9b2c22;
-      border-color: #f87171;
-      font-weight: 700;
+      background: var(--saher-red);
+      border-color: #fff;
+      font-weight: 800;
     }
     .container {
-      max-width: 1120px;
+      max-width: 1180px;
       margin: 22px auto;
-      padding: 0 16px;
+      padding: 0 16px 40px;
     }
     .tabs {
       display: flex;
       gap: 8px;
       margin-bottom: 18px;
-      border-bottom: 2px solid var(--border);
+      border-bottom: 2px solid var(--saher-black);
     }
     .tab-btn {
-      background: transparent;
-      border: none;
-      padding: 10px 20px;
-      font-size: 0.98rem;
-      font-weight: 600;
-      color: var(--muted);
+      background: #e5e5ea;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      padding: 11px 22px;
+      font-size: 0.96rem;
+      font-weight: 700;
+      color: var(--saher-black);
       cursor: pointer;
-      border-bottom: 3px solid transparent;
-      margin-bottom: -2px;
+      transition: all 0.15s;
     }
     .tab-btn.active {
-      color: var(--primary);
-      border-bottom-color: var(--primary);
+      background: var(--saher-black);
+      color: var(--saher-gold);
+      border-color: var(--saher-black);
+      box-shadow: inset 0 3px 0 var(--saher-red);
     }
     .card {
-      background: var(--card);
+      background: var(--saher-white);
       border: 1px solid var(--border);
+      border-top: 4px solid var(--saher-black);
       border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 18px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      padding: 22px;
+      margin-bottom: 20px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+    }
+    .card-gold {
+      border-top: 4px solid var(--saher-red);
     }
     .form-row {
       display: flex;
@@ -113,71 +159,84 @@
     .field {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 6px;
       flex: 1;
-      min-width: 220px;
+      min-width: 240px;
     }
     label {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: var(--saher-black);
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }
     input[type="text"], input[type="password"] {
-      padding: 10px 12px;
-      font-size: 1rem;
-      border: 1px solid var(--border);
+      padding: 11px 14px;
+      font-size: 1.05rem;
+      border: 2px solid var(--border);
       border-radius: 7px;
       outline: none;
+      transition: border-color 0.15s;
     }
     input[type="text"]:focus, input[type="password"]:focus {
-      border-color: var(--primary);
+      border-color: var(--saher-red);
     }
     .btn {
-      background: var(--primary);
-      color: #fff;
-      border: none;
+      background: var(--saher-red);
+      color: var(--saher-white);
+      border: 1px solid var(--saher-red);
       border-radius: 7px;
-      padding: 10px 18px;
-      font-size: 0.95rem;
-      font-weight: 600;
+      padding: 11px 18px;
+      font-size: 0.92rem;
+      font-weight: 700;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 7px;
       text-decoration: none;
+      transition: all 0.15s;
     }
-    .btn:hover { background: var(--primary-hover); }
-    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-sec {
-      background: #fff;
-      color: var(--primary);
-      border: 1px solid var(--primary);
+    .btn:hover { background: var(--saher-red-hover); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-black {
+      background: var(--saher-black);
+      color: var(--saher-gold);
+      border: 1px solid var(--saher-gold);
     }
-    .btn-sec:hover { background: #f1f5f9; }
-    .btn-captcha {
-      background: #1e6b3a;
+    .btn-black:hover {
+      background: #222228;
       color: #fff;
     }
-    .btn-captcha:hover { background: #16522c; }
+    .btn-gold {
+      background: var(--saher-gold);
+      color: var(--saher-black);
+      border: 1px solid #b59020;
+      font-weight: 800;
+    }
+    .btn-gold:hover { background: #e2be46; }
+    .btn-sec {
+      background: var(--saher-white);
+      color: var(--saher-black);
+      border: 1px solid var(--saher-black);
+    }
+    .btn-sec:hover { background: #f3f3f6; }
     .btn-sm {
-      padding: 5px 10px;
-      font-size: 0.82rem;
-      border-radius: 5px;
+      padding: 6px 11px;
+      font-size: 0.8rem;
+      border-radius: 6px;
     }
     .dropzone {
-      margin-top: 14px;
-      border: 2px dashed var(--border);
+      margin-top: 16px;
+      border: 2px dashed var(--saher-gold);
       border-radius: 9px;
-      padding: 18px;
+      padding: 16px;
       text-align: center;
-      background: #fafbfc;
+      background: #fffdf7;
       cursor: pointer;
     }
     .dropzone.dragover {
-      border-color: var(--primary);
-      background: #eef4fa;
+      border-color: var(--saher-red);
+      background: #fff3f3;
     }
     .file-chips {
       display: flex;
@@ -186,10 +245,12 @@
       margin-top: 10px;
     }
     .chip {
-      background: #e2e8f0;
-      padding: 4px 10px;
-      border-radius: 14px;
+      background: var(--saher-black);
+      color: var(--saher-gold);
+      padding: 5px 12px;
+      border-radius: 16px;
       font-size: 0.82rem;
+      font-weight: 600;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -198,51 +259,54 @@
       border: none;
       background: transparent;
       cursor: pointer;
-      font-weight: 700;
-      color: #64748b;
+      font-weight: 800;
+      color: var(--saher-white);
     }
     .msg-error {
       background: var(--pend-bg);
       color: var(--pend-txt);
-      border: 1px solid #f5c2c0;
-      padding: 10px 14px;
-      border-radius: 7px;
+      border-left: 4px solid var(--saher-red);
+      padding: 11px 14px;
+      border-radius: 6px;
       margin-top: 12px;
-      font-weight: 600;
+      font-weight: 700;
       display: none;
     }
     .grid-datos {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 12px;
-      margin: 14px 0;
+      margin: 16px 0;
     }
     .dato-box {
       border: 1px solid var(--border);
+      border-left: 4px solid var(--saher-gold);
       border-radius: 8px;
-      padding: 10px 12px;
-      background: #fafbfc;
+      padding: 10px 14px;
+      background: #fafafa;
     }
     .dato-box small {
       display: block;
-      font-size: 0.74rem;
+      font-size: 0.73rem;
       color: var(--muted);
       text-transform: uppercase;
-      font-weight: 700;
+      font-weight: 800;
     }
     .dato-box strong {
-      font-size: 1.05rem;
+      font-size: 1.08rem;
       display: block;
-      margin-top: 2px;
+      margin-top: 3px;
+      color: var(--saher-black);
     }
     .fuente-tag {
       display: inline-block;
       font-size: 0.75rem;
-      color: var(--muted);
-      background: #eef2f6;
-      padding: 2px 8px;
+      color: var(--saher-gold);
+      background: var(--saher-black);
+      padding: 3px 10px;
       border-radius: 6px;
       margin-top: 4px;
+      font-weight: 600;
     }
     .totales-row {
       display: flex;
@@ -253,47 +317,64 @@
     .tot-card {
       flex: 1;
       min-width: 150px;
-      padding: 10px 14px;
+      padding: 11px 16px;
       border-radius: 8px;
-      font-weight: 700;
+      font-weight: 800;
       font-size: 1rem;
     }
-    .tot-completo { background: var(--ok-bg); color: var(--ok-txt); }
-    .tot-observacion { background: var(--obs-bg); color: var(--obs-txt); }
-    .tot-pendiente { background: var(--pend-bg); color: var(--pend-txt); }
+    .tot-completo { background: var(--ok-bg); color: var(--ok-txt); border: 1px solid #b7e1cd; }
+    .tot-observacion { background: var(--obs-bg); color: var(--obs-txt); border: 1px solid #f7cb4d; }
+    .tot-pendiente { background: var(--pend-bg); color: var(--pend-txt); border: 1px solid #f28b82; }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 10px;
+      margin-top: 12px;
     }
     th, td {
       border-bottom: 1px solid var(--border);
-      padding: 10px 8px;
+      padding: 12px 10px;
       text-align: left;
       vertical-align: top;
       font-size: 0.92rem;
     }
     th {
+      background: var(--saher-black);
+      color: var(--saher-gold);
       font-size: 0.78rem;
       text-transform: uppercase;
-      color: var(--muted);
-      border-bottom: 2px solid var(--text);
+      letter-spacing: 0.05em;
     }
     .badge {
       display: inline-block;
-      padding: 3px 9px;
+      padding: 4px 10px;
       border-radius: 12px;
-      font-size: 0.78rem;
-      font-weight: 700;
+      font-size: 0.76rem;
+      font-weight: 800;
       text-transform: uppercase;
       white-space: nowrap;
     }
     .badge.completo { background: var(--ok-bg); color: var(--ok-txt); }
     .badge.observación { background: var(--obs-bg); color: var(--obs-txt); }
     .badge.pendiente { background: var(--pend-bg); color: var(--pend-txt); }
+    .upload-slot-box {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1.5px dashed var(--saher-gold);
+      border-radius: 8px;
+      background: #fffdf7;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .upload-slot-box.manual-req {
+      border-color: var(--saher-red);
+      background: #fff8f8;
+    }
     .portal-helper {
       margin-top: 8px;
-      background: #f8fafc;
+      background: #f6f6f9;
       border: 1px solid var(--border);
       border-radius: 7px;
       padding: 8px 10px;
@@ -301,7 +382,7 @@
       flex-wrap: wrap;
       align-items: center;
       gap: 8px;
-      font-size: 0.84rem;
+      font-size: 0.82rem;
     }
     .copy-pill {
       background: #fff;
@@ -314,17 +395,17 @@
     }
     .enlace-box {
       margin-top: 14px;
-      padding: 12px;
-      background: #eef6ff;
-      border: 1px solid #bfdbfe;
+      padding: 14px;
+      background: #16161a;
+      color: var(--saher-white);
+      border: 1px solid var(--saher-gold);
       border-radius: 8px;
       display: none;
     }
-    /* Modal Login */
     #login-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(15, 41, 66, 0.85);
+      background: rgba(11, 11, 13, 0.9);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -332,11 +413,12 @@
     }
     .login-card {
       background: #fff;
+      border-top: 5px solid var(--saher-red);
       padding: 28px;
       border-radius: 12px;
       width: 100%;
-      max-width: 380px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      max-width: 390px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
     }
   </style>
 </head>
@@ -345,7 +427,7 @@
   <!-- Login de RR. HH. -->
   <div id="login-overlay" style="display:none;">
     <div class="login-card">
-      <h2 style="margin-top:0;">SAHER — Acceso RR. HH.</h2>
+      <h2 style="margin-top:0;color:var(--saher-red);">SAHER — Acceso RR. HH.</h2>
       <p style="color:var(--muted);font-size:0.9rem;">Ingresa con tu usuario y contraseña de Recursos Humanos.</p>
       <div class="field" style="margin-bottom:12px;">
         <label>Usuario</label>
@@ -360,62 +442,63 @@
     </div>
   </div>
 
+  <!-- CABECERA CON LÍNEA GRÁFICA SAHER (NEGRO, ROJO, DORADO Y BLANCO) -->
   <header>
-    <div class="brand">
-      <h1>SAHER SEGURIDAD PRIVADA — EXPEDIENTES RR. HH.</h1>
-      <span>Armado y validación automática de expedientes de postulantes a guardia</span>
+    <div class="brand-wrap">
+      <div class="eagle-badge" title="SAHER Centro de Capacitación">
+        <svg width="36" height="36" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 22C18 22 26 26 32 32C37 25 46 18 58 16C50 24 44 30 41 36C47 35 53 33 58 30C50 38 42 42 35 44L32 54L27 44C19 41 12 34 8 22Z" fill="#D4AF37"/>
+        </svg>
+      </div>
+      <div class="brand-title">
+        <div class="saher-word">SAHER</div>
+        <div class="saher-sub">CENTRO DE CAPACITACIÓN · FORMACIÓN PARA GUARDIAS DE SEGURIDAD PRIVADA</div>
+        <div class="saher-tag">"Tu superación es nuestro compromiso" · Acuerdo Ministerial No. 0587</div>
+      </div>
     </div>
     <div class="saldos-bar">
-      <div id="saldo-ecuadorapi" class="pill-saldo">EcuadorAPI: consultando saldo...</div>
-      <div id="saldo-captcha" class="pill-saldo">Captcha (2Captcha): consultando...</div>
-      <button class="btn btn-sm btn-sec" onclick="cerrarSesion()">Salir</button>
+      <div id="saldo-ecuadorapi" class="pill-saldo">EcuadorAPI: consultando...</div>
+      <div id="saldo-captcha" class="pill-saldo">2Captcha: consultando...</div>
+      <button class="btn btn-sm btn-black" onclick="cerrarSesion()">Salir</button>
     </div>
   </header>
 
   <div class="container">
     <div class="tabs">
-      <button class="tab-btn active" id="tab-btn-armar" onclick="cambiarTab('armar')">1. Armar Expediente</button>
-      <button class="tab-btn" id="tab-btn-postulantes" onclick="cambiarTab('postulantes')">2. Postulantes (Tabla de control)</button>
+      <button class="tab-btn active" id="tab-btn-armar" onclick="cambiarTab('armar')">1. Buscador y Armado de Expediente</button>
+      <button class="tab-btn" id="tab-btn-postulantes" onclick="cambiarTab('postulantes')">2. Postulantes (Tabla de Control)</button>
     </div>
 
     <!-- PESTAÑA 1: ARMAR EXPEDIENTE -->
     <div id="tab-armar">
-      <div class="card">
+      <div class="card card-gold">
         <div class="form-row">
           <div class="field">
-            <label for="input-cedula">🔍 Buscador de Expediente por Número de Cédula (10 dígitos)</label>
-            <input type="text" id="input-cedula" maxlength="10" placeholder="Escribe la cédula y presiona Enter (ej. 1804625752)" onkeydown="if(event.key==='Enter') armarExpediente(true, true)" style="font-size:1.15rem;font-weight:700;" />
+            <label for="input-cedula">🔍 Número de Cédula del Postulante (10 dígitos)</label>
+            <input type="text" id="input-cedula" maxlength="10" placeholder="Ingresa la cédula (ej. 1804625752 o 1712345675)" onkeydown="if(event.key==='Enter') armarExpediente(false)" style="font-size:1.15rem;font-weight:800;" />
           </div>
-          <button class="btn btn-captcha" id="btn-armar-captcha" onclick="armarExpediente(true, true)" style="padding:12px 22px;font-size:1.02rem;">
-            🔍 Buscar Cédula y Desplegar PDF Único
+          <button class="btn" id="btn-armar" onclick="armarExpediente(false)">
+            🔍 Consultar Cédula y Compilar PDF Único
           </button>
-          <button class="btn btn-sec" id="btn-armar" onclick="armarExpediente(false, false)" title="Solo valida los archivos subidos manualmente">
-            Validar archivos manuales
+          <button class="btn btn-black" id="btn-armar-captcha" onclick="armarExpediente(true, null, false)" title="Conecta con los 6 portales oficiales usando navegador + 2Captcha para descargar los certificados reales">
+            🤖 Descargar todos los portales oficiales (2Captcha)
           </button>
         </div>
-        <div id="bitacora-agentes" style="display:none;margin-top:14px;background:#0f2942;color:#e2e8f0;padding:12px 16px;border-radius:8px;font-family:monospace;font-size:0.84rem;line-height:1.6;"></div>
 
-        <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
-          <strong>Subir archivos del postulante (PDF, JPG o PNG — máx. 10 MB c/u)</strong>
-          <div style="font-size:0.85rem;color:var(--muted);margin-top:4px;">
-            Arrastra aquí o haz clic para elegir: test psicológico, aptitud física, toxicológico, foto de la cédula y cualquier certificado descargado.
-          </div>
-          <input type="file" id="file-input" multiple accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="agregarArchivos(this.files)" />
-        </div>
-        <div class="file-chips" id="lista-archivos"></div>
+        <div id="bitacora-agentes" style="display:none;margin-top:14px;background:var(--saher-black);color:var(--saher-gold-light);border-left:4px solid var(--saher-red);padding:12px 16px;border-radius:8px;font-family:monospace;font-size:0.84rem;line-height:1.6;"></div>
         <div id="msg-error" class="msg-error"></div>
       </div>
 
       <!-- RESULTADO DEL EXPEDIENTE -->
       <div class="card" id="resultado-card" style="display:none;">
-        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;border-bottom:2px solid var(--saher-black);padding-bottom:14px;">
           <div>
-            <h2 style="margin:0;" id="res-nombre">—</h2>
+            <h2 style="margin:0;color:var(--saher-black);font-size:1.5rem;" id="res-nombre">—</h2>
             <span class="fuente-tag" id="res-fuente">fuente: EcuadorAPI, no oficial</span>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:10px;">
-            <a class="btn" id="btn-descargar-pdf" href="#" target="_blank">⬇ Descargar PDF</a>
-            <button class="btn btn-sec" onclick="generarEnlacePostulante()">📲 Enviar enlace al postulante</button>
+            <a class="btn" id="btn-descargar-pdf" href="#" target="_blank">⬇ Descargar Expediente en 1 solo PDF</a>
+            <button class="btn btn-gold" onclick="generarEnlacePostulante()">📲 Enviar enlace al postulante (7 días)</button>
           </div>
         </div>
 
@@ -423,15 +506,15 @@
 
         <div class="grid-datos">
           <div class="dato-box">
-            <small>Cédula</small>
+            <small>Número de Cédula</small>
             <strong id="res-cedula">—</strong>
           </div>
           <div class="dato-box">
-            <small>Fecha de nacimiento <span style="font-weight:normal;">(fuente: EcuadorAPI, no oficial)</span></small>
+            <small>Fecha de Nacimiento <span style="font-weight:normal;">(fuente: EcuadorAPI, no oficial)</span></small>
             <strong id="res-fnac">—</strong>
           </div>
           <div class="dato-box">
-            <small>Estado civil <span style="font-weight:normal;">(fuente: EcuadorAPI, no oficial)</span></small>
+            <small>Estado Civil / Datos <span style="font-weight:normal;">(fuente: EcuadorAPI, no oficial)</span></small>
             <strong id="res-ecivil">—</strong>
           </div>
         </div>
@@ -442,25 +525,31 @@
           <div class="tot-card tot-pendiente" id="res-tot-pend">0 pendientes</div>
         </div>
 
-        <!-- VISOR EN VIVO DEL PDF ÚNICO CON TODOS LOS CERTIFICADOS -->
-        <div style="margin: 18px 0; border: 2px solid var(--primary); border-radius: 10px; overflow: hidden; background: #1e293b;">
-          <div style="background: var(--primary); color: #fff; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;">
-            <strong>📄 Expediente Completo Unificado (Todos los certificados en 1 solo PDF)</strong>
-            <a class="btn btn-sm" style="background:#1e6b3a;" id="btn-abrir-pdf-pestana" href="#" target="_blank">Abrir PDF en pantalla completa ↗</a>
-          </div>
-          <iframe id="visor-pdf-unico" src="about:blank" style="width: 100%; height: 760px; border: none; background: #fff;"></iframe>
-        </div>
-
+        <!-- TABLA DE LOS 11 DOCUMENTOS CON DESCARGA INDIVIDUAL 1 A 1 Y SUBIDA MANUAL POR ÍTEM -->
+        <h3 style="margin:18px 0 6px;color:var(--saher-black);text-transform:uppercase;font-size:0.95rem;letter-spacing:0.04em;">
+          📋 Lista de Certificados por Entidad (Descarga individual 1 a 1) y Exámenes de Subida Manual
+        </h3>
         <table>
           <thead>
             <tr>
               <th style="width:36px;">#</th>
-              <th>Documento y motivo / detalles</th>
+              <th>Entidad / Certificado y Acciones Individuales (Descargar 1 a 1 o Subir PDF / DOC / Imagen)</th>
               <th style="width:130px;">Estado</th>
             </tr>
           </thead>
           <tbody id="res-tabla-docs"></tbody>
         </table>
+
+        <!-- VISOR EN VIVO DEL PDF ÚNICO COMPILADO -->
+        <div style="margin: 24px 0 8px; border: 2px solid var(--saher-black); border-radius: 10px; overflow: hidden; background: var(--saher-black);">
+          <div style="background: var(--saher-black); color: var(--saher-gold); padding: 12px 16px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 2px solid var(--saher-red);">
+            <strong>📄 VISTA PREVIA DEL EXPEDIENTE COMPILADO EN 1 SOLO PDF</strong>
+            <div style="display:flex;gap:8px;">
+              <a class="btn btn-sm btn-gold" id="btn-abrir-pdf-pestana" href="#" target="_blank">Abrir PDF único en pestaña nueva ↗</a>
+            </div>
+          </div>
+          <iframe id="visor-pdf-unico" src="about:blank" style="width: 100%; height: 740px; border: none; background: #fff;"></iframe>
+        </div>
       </div>
     </div>
 
@@ -472,7 +561,7 @@
             <label for="buscar-cedula">Buscar por cédula o nombre</label>
             <input type="text" id="buscar-cedula" placeholder="Escribe la cédula o apellido..." oninput="filtrarTablaPostulantes()" />
           </div>
-          <button class="btn btn-sec" onclick="cargarPostulantes()">Actualizar tabla</button>
+          <button class="btn btn-black" onclick="cargarPostulantes()">Actualizar tabla</button>
         </div>
         <table>
           <thead>
@@ -495,30 +584,48 @@
   <script>
     const PORTALES_INFO = {
       antecedentes: {
+        entidad: 'Ministerio del Interior',
         url: 'https://certificados.ministeriodelinterior.gob.ec/gestorcertificados/antecedentes/',
-        instruccion: 'Ecuatoriano: SÍ → Cédula → motivo "Proceso de reclutamiento de personal" → Visualizar Certificado',
+        instruccion: 'Ecuatoriano: SÍ → Cédula → motivo "Proceso de reclutamiento de personal" → Visualizar Certificado PDF',
       },
       judiciales: {
+        entidad: 'Función Judicial (e-SATJE)',
         url: 'https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros',
         instruccion: 'Pegar cédula en "Demandado / Procesado" → BUSCAR → Imprimir (Ctrl+P) como PDF',
       },
       no_ffaa: {
+        entidad: 'Ministerio de Defensa (MIDENA)',
         url: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
-        instruccion: 'Pegar cédula + texto de seguridad → Consultar → guardar PDF',
+        instruccion: 'Pegar cédula + texto de seguridad → Consultar → guardar certificado PDF real',
       },
       clts: {
+        entidad: 'Ministerio de Defensa (MIDENA CLTS)',
         url: 'https://sidehu.midena.gob.ec/certificados/clts.action',
-        instruccion: 'Pegar cédula + texto de seguridad → responder pregunta → guardar PDF',
+        instruccion: 'Pegar cédula + texto de seguridad → responder pregunta → guardar certificado PDF real',
       },
       servidor_publico: {
+        entidad: 'Ministerio del Trabajo',
         url: 'https://calculadoras.trabajo.gob.ec/dependencia',
-        instruccion: 'Pegar cédula + fecha de nacimiento (DD/MM/AAAA) → Generar → guardar PDF',
+        instruccion: 'Pegar cédula + fecha de nacimiento (DD/MM/AAAA) → Generar → guardar certificado PDF real',
+      },
+      titulo_bachiller: {
+        entidad: 'Ministerio de Educación',
+        url: 'https://servicios.educacion.gob.ec/titulacion25-web/faces/paginas/consulta-titulos-refrendados.xhtml',
+        instruccion: 'Pegar cédula + código de imagen → Buscar → imprimir o guardar certificado PDF real',
       },
     };
 
-    let archivosSeleccionados = [];
+    const ITEMS_MANUALES = {
+      psicologico: 'Subir manualmente el Test de Confianza Psicológico (PDF, DOC, DOCX o Imagen)',
+      aptitud_fisica: 'Subir manualmente el Certificado de Aptitud Física (PDF, DOC, DOCX o Imagen)',
+      toxicologico: 'Subir manualmente el Resultado del Examen Toxicológico (PDF, DOC, DOCX o Imagen)',
+      cedula: 'Subir manualmente la Foto o Escaneo de la Cédula de Identidad (JPG, PNG o PDF)',
+    };
+
     let listaPostulantesCache = [];
     let expedienteActual = null;
+    let archivosIndividualesCache = {};
+    let ultimoBlobUrl = null;
     const API_BASE = location.protocol === 'file:' ? 'http://localhost:3000' : '';
 
     function obtenerTokenAuth() {
@@ -553,11 +660,9 @@
           actualizarBarraSaldos(d.ecuadorApi, d.captcha);
         }
       } catch (e) {
-        if (e.message === 'CRED_INVALIDA') {
-          el.textContent = 'Usuario o contraseña incorrectos (por defecto: rrhh / saher2026).';
-        } else {
-          el.textContent = 'No se pudo conectar con el servidor en http://localhost:3000. Espera unos segundos y vuelve a intentar.';
-        }
+        el.textContent = e.message === 'CRED_INVALIDA'
+          ? 'Usuario o contraseña incorrectos (por defecto: rrhh / saher2026).'
+          : 'No se pudo conectar con el servidor.';
         el.style.display = 'block';
       }
     }
@@ -571,30 +676,26 @@
       const elEc = document.getElementById('saldo-ecuadorapi');
       if (ec) {
         if (!ec.configurado) {
-          elEc.textContent = 'EcuadorAPI: sin clave en .env ($0,03/cédula)';
+          elEc.textContent = 'EcuadorAPI: sin clave ($0,03/cédula)';
           elEc.classList.remove('alerta');
         } else if (ec.balance_usd !== null) {
           const rest = ec.remaining_queries ?? Math.floor(ec.balance_usd / 0.03);
-          elEc.textContent = `Saldo EcuadorAPI: US$ ${ec.balance_usd.toFixed(2)} (${rest} consultas)`;
+          elEc.textContent = `EcuadorAPI: US$ ${ec.balance_usd.toFixed(2)} (${rest} consultas)`;
           if (rest < 20) {
-            elEc.textContent += ' ⚠ ¡Quedan menos de 20 consultas!';
+            elEc.textContent += ' ⚠ ¡Menos de 20 consultas!';
             elEc.classList.add('alerta');
           } else {
             elEc.classList.remove('alerta');
           }
-        } else {
-          elEc.textContent = `EcuadorAPI: ${ec.error || 'conectado'}`;
         }
       }
 
       const elCap = document.getElementById('saldo-captcha');
       if (cap) {
         if (!cap.configurado) {
-          elCap.textContent = '2Captcha: sin clave en .env (recarga mín. US$ 3,00)';
+          elCap.textContent = '2Captcha: sin clave';
         } else if (cap.balance_usd !== null) {
-          elCap.textContent = `Saldo ${cap.provider}: US$ ${cap.balance_usd.toFixed(2)} (~${cap.estimado_expedientes} exp.)`;
-        } else {
-          elCap.textContent = `${cap.provider}: ${cap.error || 'listo'}`;
+          elCap.textContent = `2Captcha: US$ ${cap.balance_usd.toFixed(2)} (~${cap.estimado_expedientes} exp.)`;
         }
       }
     }
@@ -613,42 +714,6 @@
       }
       if (((10 - (s % 10)) % 10) !== Number(c[9])) return 'Dígito verificador inválido (módulo 10)';
       return null;
-    }
-
-    // Drag & Drop archivos
-    const dz = document.getElementById('dropzone');
-    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
-    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-    dz.addEventListener('drop', e => {
-      e.preventDefault();
-      dz.classList.remove('dragover');
-      if (e.dataTransfer.files) agregarArchivos(e.dataTransfer.files);
-    });
-
-    function agregarArchivos(fileList) {
-      for (const f of fileList) {
-        if (f.size > 10 * 1024 * 1024) {
-          mostrarError(`El archivo "${f.name}" supera los 10 MB.`);
-          continue;
-        }
-        archivosSeleccionados.push(f);
-      }
-      renderizarArchivosSeleccionados();
-    }
-
-    function quitarArchivo(idx) {
-      archivosSeleccionados.splice(idx, 1);
-      renderizarArchivosSeleccionados();
-    }
-
-    function renderizarArchivosSeleccionados() {
-      const cont = document.getElementById('lista-archivos');
-      cont.innerHTML = archivosSeleccionados.map((f, i) => `
-        <span class="chip">
-          📄 ${f.name} (${(f.size / 1024).toFixed(0)} KB)
-          <button onclick="quitarArchivo(${i})" title="Quitar">×</button>
-        </span>
-      `).join('');
     }
 
     function mostrarError(msg) {
@@ -671,7 +736,116 @@
       });
     }
 
-    async function armarExpediente(descargarConCaptcha = true, forzarAgentes = false) {
+    // Subir archivo manualmente en el recuadro de un ítem específico y recompilar el PDF único
+    async function subirArchivoIndividualSlot(slotClave, inputEl) {
+      const file = inputEl.files?.[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        alert('El archivo supera el máximo de 10 MB.');
+        inputEl.value = '';
+        return;
+      }
+      const cedula = document.getElementById('input-cedula').value.trim();
+      const errCed = validarCedulaFrontend(cedula);
+      if (errCed) {
+        mostrarError(errCed);
+        inputEl.value = '';
+        return;
+      }
+
+      const bitacoraEl = document.getElementById('bitacora-agentes');
+      bitacoraEl.style.display = 'block';
+      bitacoraEl.innerHTML = `<div>📤 Subiendo archivo manual <b>${file.name}</b> para <b>${slotClave}</b> y recompilando el PDF único...</div>`;
+
+      try {
+        const dataBase64 = await archivoABase64(file);
+        const resp = await apiFetch('/api/rrhh/armar', {
+          method: 'POST',
+          body: JSON.stringify({
+            cedula,
+            archivos: [{ nombre: file.name, dataBase64, slotClave }],
+            descargarConCaptcha: false,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          mostrarError(data.error || 'Error al subir archivo');
+          return;
+        }
+        bitacoraEl.innerHTML = `<div>✅ Archivo <b>${file.name}</b> validado e integrado en el PDF único del expediente.</div>`;
+        archivosIndividualesCache = data.archivosIndividuales || {};
+        mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
+      } catch (err) {
+        mostrarError(err.message);
+      } finally {
+        inputEl.value = '';
+      }
+    }
+
+    // Descargar 1 certificado individual de un portal oficial (1 por 1)
+    async function descargarUnSoloPortal(clavePortal, btnEl) {
+      const cedula = document.getElementById('input-cedula').value.trim();
+      const errCed = validarCedulaFrontend(cedula);
+      if (errCed) {
+        mostrarError(errCed);
+        return;
+      }
+      const txtOrig = btnEl.textContent;
+      btnEl.disabled = true;
+      btnEl.textContent = '⏳ Consultando portal oficial...';
+
+      const bitacoraEl = document.getElementById('bitacora-agentes');
+      bitacoraEl.style.display = 'block';
+      bitacoraEl.innerHTML = `<div>🤖 Conectando con el portal oficial para descargar <b>${clavePortal}</b> (C.I. ${cedula})...</div>`;
+
+      try {
+        const resp = await apiFetch('/api/rrhh/armar', {
+          method: 'POST',
+          body: JSON.stringify({
+            cedula,
+            descargarConCaptcha: true,
+            soloClaves: [clavePortal],
+            forzarAgentes: true,
+          }),
+        });
+        const data = await resp.json();
+        if (data.descargaPortales?.bitacora) {
+          bitacoraEl.innerHTML = data.descargaPortales.bitacora.map(l => `<div>${l}</div>`).join('');
+        }
+        if (data.saldos) actualizarBarraSaldos(data.saldos.ecuadorApi, data.saldos.captcha);
+        archivosIndividualesCache = data.archivosIndividuales || {};
+        mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
+      } catch (err) {
+        mostrarError(err.message);
+      } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = txtOrig;
+      }
+    }
+
+    // Descargar a la PC un certificado individual ya existente
+    function descargarArchivoIndividualExistente(cedula, nombreArchivo) {
+      const b64 = archivosIndividualesCache[nombreArchivo];
+      if (b64) {
+        const binStr = atob(b64);
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        const ext = (nombreArchivo.split('.').pop() || '').toLowerCase();
+        const mime = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${cedula}_${nombreArchivo}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+        return;
+      }
+      window.open(`${API_BASE}/api/rrhh/certificado/${cedula}/${encodeURIComponent(nombreArchivo)}`, '_blank');
+    }
+
+    async function armarExpediente(descargarConCaptcha = false, soloClaves = null, forzarAgentes = false) {
       mostrarError('');
       const cedula = document.getElementById('input-cedula').value.trim();
       const errCedula = validarCedulaFrontend(cedula);
@@ -685,26 +859,20 @@
       const bitacoraEl = document.getElementById('bitacora-agentes');
       btn1.disabled = true;
       btn2.disabled = true;
-      btn2.textContent = descargarConCaptcha ? '🤖 Agentes IA buscando en portales...' : 'Armando...';
 
       if (descargarConCaptcha) {
         bitacoraEl.style.display = 'block';
-        bitacoraEl.innerHTML = `<div>🧠 Iniciando enjambre de Agentes IA para cédula <b>${cedula}</b> (EcuadorAPI + e-SATJE + MIDENA + Min. Interior + Min. Trabajo + 2Captcha)...</div>`;
+        bitacoraEl.innerHTML = `<div>🤖 Consultando portales gubernamentales reales + 2Captcha para C.I. <b>${cedula}</b>...</div>`;
       }
 
       try {
-        const archivosPayload = [];
-        for (const f of archivosSeleccionados) {
-          const dataBase64 = await archivoABase64(f);
-          archivosPayload.push({ nombre: f.name, dataBase64 });
-        }
-
         const resp = await apiFetch('/api/rrhh/armar', {
           method: 'POST',
           body: JSON.stringify({
             cedula,
-            archivos: archivosPayload,
+            archivos: [],
             descargarConCaptcha,
+            soloClaves,
             forzarAgentes,
           }),
         });
@@ -714,21 +882,19 @@
           return;
         }
 
-        if (data.descargaPortales?.bitacora) {
+        if (data.descargaPortales?.bitacora?.length) {
           bitacoraEl.style.display = 'block';
           bitacoraEl.innerHTML = data.descargaPortales.bitacora.map(l => `<div>${l}</div>`).join('');
         }
 
-        archivosSeleccionados = [];
-        renderizarArchivosSeleccionados();
         if (data.saldos) actualizarBarraSaldos(data.saldos.ecuadorApi, data.saldos.captcha);
+        archivosIndividualesCache = data.archivosIndividuales || {};
         mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
       } catch (err) {
         mostrarError(err.message);
       } finally {
         btn1.disabled = false;
         btn2.disabled = false;
-        btn2.textContent = '🔍 Buscar Cédula y Desplegar PDF Único';
       }
     }
 
@@ -738,8 +904,6 @@
       btnEl.textContent = '¡Copiado!';
       setTimeout(() => { btnEl.textContent = orig; }, 1400);
     }
-
-    let ultimoBlobUrl = null;
 
     function mostrarResultadoExpediente(exp, identidad, pdfBase64 = null) {
       expedienteActual = exp;
@@ -785,18 +949,60 @@
 
       const tbody = document.getElementById('res-tabla-docs');
       tbody.innerHTML = exp.slots.map(s => {
+        if (s.clave === 'portada') {
+          return `
+            <tr>
+              <td><b>${s.orden}</b></td>
+              <td><strong>${s.titulo}</strong> <span style="font-size:0.82rem;color:var(--muted);">— Generada automáticamente al inicio del PDF único</span></td>
+              <td><span class="badge ${s.estado}">${s.estado}</span></td>
+            </tr>
+          `;
+        }
+
         const portal = PORTALES_INFO[s.clave];
-        const mostrarAyudaPortal = s.estado !== 'completo' && portal;
+        const descManual = ITEMS_MANUALES[s.clave];
+        const tieneArchivo = !!s.archivo;
+
         return `
           <tr>
             <td><b>${s.orden}</b></td>
             <td>
-              <strong>${s.titulo}</strong>
-              ${s.archivo ? `<div style="font-size:0.83rem;color:var(--muted);">Archivo: <code>${s.archivo}</code>${s.fecha_emision ? ` · Emisión: ${s.fecha_emision}` : ''}${s.vence ? ` · Vence: ${s.vence}` : ''}</div>` : ''}
-              ${s.motivo ? `<div style="font-size:0.85rem;color:var(--muted);margin-top:3px;">${s.motivo}</div>` : ''}
-              ${mostrarAyudaPortal ? `
+              <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;">
+                <div>
+                  <strong>${s.titulo}</strong>
+                  ${portal ? `<span style="font-size:0.78rem;background:var(--saher-black);color:var(--saher-gold);padding:2px 8px;border-radius:5px;margin-left:6px;">${portal.entidad}</span>` : `<span style="font-size:0.78rem;background:var(--saher-red);color:#fff;padding:2px 8px;border-radius:5px;margin-left:6px;">Carga Manual RR. HH.</span>`}
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  ${portal ? `
+                    <button class="btn btn-sm btn-black" onclick="descargarUnSoloPortal('${s.clave}', this)" title="Intenta descargar solo este certificado real desde el portal oficial">
+                      🤖 Descargar 1 a 1 del portal
+                    </button>
+                  ` : ''}
+                  ${tieneArchivo ? `
+                    <button class="btn btn-sm btn-gold" onclick="descargarArchivoIndividualExistente('${cedula}', '${s.archivo}')">
+                      ⬇ Descargar este certificado individual (${s.archivo})
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+
+              ${s.archivo ? `<div style="font-size:0.83rem;color:var(--muted);margin-top:4px;">Archivo actual: <code>${s.archivo}</code>${s.fecha_emision ? ` · Emisión: ${s.fecha_emision}` : ''}${s.vence ? ` · Vence: ${s.vence}` : ''}</div>` : ''}
+              ${s.motivo ? `<div style="font-size:0.84rem;color:var(--pend-txt);margin-top:4px;font-weight:600;">${s.motivo}</div>` : ''}
+
+              <!-- RECUADRO PARA SUBIR MANUALMENTE (PDF, DOC, DOCX, JPG, PNG) EN CADA ÍTEM -->
+              <div class="upload-slot-box ${descManual ? 'manual-req' : ''}">
+                <span style="font-size:0.82rem;font-weight:700;color:var(--saher-black);">
+                  📤 ${descManual || `¿No se pudo descargar por API/Agente? Sube aquí el archivo real de ${portal?.entidad || s.titulo} (PDF, DOC, Imagen):`}
+                </span>
+                <label class="btn btn-sm" style="margin:0;">
+                  Seleccionar PDF / DOC / Imagen
+                  <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="subirArchivoIndividualSlot('${s.clave}', this)" />
+                </label>
+              </div>
+
+              ${portal ? `
                 <div class="portal-helper">
-                  <a class="btn btn-sm" href="${portal.url}" target="_blank" rel="noopener">🔗 Abrir portal</a>
+                  <a class="btn btn-sm btn-sec" href="${portal.url}" target="_blank" rel="noopener">🔗 Abrir portal oficial (${portal.entidad})</a>
                   <span class="copy-pill">
                     Cédula: <b>${cedula}</b>
                     <button class="btn btn-sm btn-sec" onclick="copiarTexto('${cedula}', this)">Copiar</button>
@@ -805,7 +1011,7 @@
                     Fecha nac.: <b>${fnac}</b>
                     <button class="btn btn-sm btn-sec" onclick="copiarTexto('${fnac}', this)">Copiar</button>
                   </span>
-                  <span style="color:var(--muted);font-size:0.8rem;">${portal.instruccion}</span>
+                  <span style="color:var(--muted);font-size:0.79rem;">${portal.instruccion}</span>
                 </div>
               ` : ''}
             </td>
@@ -828,11 +1034,11 @@
         const vence = new Date(data.expiraEn).toLocaleDateString('es-EC');
         box.style.display = 'block';
         box.innerHTML = `
-          <strong>Enlace único para el postulante (vence el ${vence} — 7 días):</strong>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;">
+          <strong style="color:var(--saher-gold);">📲 Enlace único para el celular del postulante (vence el ${vence} — 7 días):</strong>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
             <input type="text" readonly value="${data.url}" style="flex:1;min-width:260px;" />
-            <button class="btn btn-sm" onclick="copiarTexto('${data.url}', this)">Copiar enlace</button>
-            <a class="btn btn-sm btn-sec" href="${data.url}" target="_blank">Abrir vista del postulante</a>
+            <button class="btn btn-sm btn-gold" onclick="copiarTexto('${data.url}', this)">Copiar enlace</button>
+            <a class="btn btn-sm" href="${data.url}" target="_blank">Abrir pantalla del postulante ↗</a>
           </div>
         `;
       }
@@ -863,7 +1069,7 @@
       const tbody = document.getElementById('tabla-postulantes-body');
       tbody.innerHTML = filtrados.map(p => {
         const exp = p.expediente;
-        const comp = exp ? `${exp.totales.completo}/10` : 'Sin procesar';
+        const comp = exp ? `${exp.totales.completo}/11` : 'Sin procesar';
         const detalle = exp
           ? `${exp.totales['observación']} obs. · ${exp.totales.pendiente} pend.`
           : '—';
@@ -873,7 +1079,7 @@
             <td>${p.nombre_completo || '—'}</td>
             <td>${p.fecha_nacimiento || '—'}</td>
             <td>${p.estado_civil || '—'}</td>
-            <td><span class="badge ${exp?.totales?.completo === 10 ? 'completo' : 'observación'}">${comp}</span></td>
+            <td><span class="badge ${exp?.totales?.completo === 11 ? 'completo' : 'observación'}">${comp}</span></td>
             <td>${detalle}</td>
             <td>
               <button class="btn btn-sm" onclick="abrirPostulanteEnArmar('${p.cedula}')">Ver / Armar</button>
@@ -889,7 +1095,7 @@
       armarExpediente(false);
     }
 
-    // Inicializar al abrir: autenticar automáticamente con las credenciales por defecto y mostrar el expediente de prueba 1712345675
+    // Inicializar al abrir
     (async () => {
       try {
         const r = await apiFetch('/api/rrhh/saldos');
@@ -897,8 +1103,8 @@
         if (d.ok) {
           document.getElementById('login-overlay').style.display = 'none';
           actualizarBarraSaldos(d.ecuadorApi, d.captcha);
-          document.getElementById('input-cedula').value = '1804625752';
-          await armarExpediente(true, true);
+          document.getElementById('input-cedula').value = '1712345675';
+          await armarExpediente(false);
         }
       } catch {
         document.getElementById('login-overlay').style.display = 'flex';

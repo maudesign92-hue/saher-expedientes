@@ -1,10 +1,10 @@
 /**
  * codigo/descargar_portales.mjs
- * Sistema Multi-Agente IA autónomo para SAHER:
- * - Consulta en vivo las APIs/portales oficiales del Ecuador + 2Captcha ($3.00 saldo activo)
- * - Consulta en vivo la API REST oficial de la Función Judicial (e-SATJE: api.funcionjudicial.gob.ec)
- * - Consulta MIDENA (No FF.AA. y Tiempo de Servicio), Ministerio del Interior y Ministerio del Trabajo
- * - Genera automáticamente los PDFs verificados en entrada/<cedula>/ tanto en Vercel Serverless como en PC local.
+ * Descarga REAL desde las 6 entidades gubernamentales del Ecuador usando Playwright/Chromium + 2Captcha.
+ * - NO inventa ni genera PDFs sintéticos falsos.
+ * - Los 4 documentos internos (Test psicológico, Aptitud física, Examen toxicológico y Foto de Cédula)
+ *   NUNCA se autogeneran: se suben manualmente en sus respectivos recuadros.
+ * - Soporta descarga individual entidad por entidad (soloClaves: ['no_ffaa'], etc.) o de todas las entidades.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,6 +25,35 @@ function recargarEnv() {
     const v = t.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '');
     if (v) process.env[k] = v;
   }
+}
+
+function encontrarNavegadorLocal() {
+  const candidatos = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  ];
+  return candidatos.find(p => fs.existsSync(p)) || null;
+}
+
+async function lanzarNavegadorChromium() {
+  const { chromium } = await import('playwright');
+  const exe = encontrarNavegadorLocal();
+  const opciones = [
+    ...(exe ? [{ headless: true, executablePath: exe }] : []),
+    { headless: true, channel: 'chrome' },
+    { headless: true, channel: 'msedge' },
+    { headless: true },
+  ];
+  for (const opts of opciones) {
+    try {
+      return await chromium.launch(opts);
+    } catch {
+      // Intentar siguiente opción
+    }
+  }
+  throw new Error('En Vercel Serverless no hay navegador de escritorio instalado para navegar portales .gob.ec (usa el servidor local http://localhost:3000 para descarga automática con navegador o sube el PDF manualmente en el recuadro de cada entidad).');
 }
 
 export function obtenerConfigCaptcha() {
@@ -108,7 +137,7 @@ export async function consultarSaldoCaptcha() {
 
 export async function resolverCaptchaImagen(base64Image) {
   const cfg = obtenerConfigCaptcha();
-  if (!cfg.configurado) throw new Error('TWOCAPTCHA_API_KEY no configurada');
+  if (!cfg.configurado) throw new Error('TWOCAPTCHA_API_KEY no configurada en .env');
   const cleanB64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
 
   const createResp = await fetch('https://api.2captcha.com/createTask', {
@@ -133,8 +162,8 @@ export async function resolverCaptchaImagen(base64Image) {
     throw new Error(`2Captcha error: ${createData.errorDescription || createData.errorCode}`);
   }
   const taskId = createData.taskId;
-  for (let intento = 0; intento < 15; intento++) {
-    await sleep(2500);
+  for (let intento = 0; intento < 20; intento++) {
+    await sleep(3000);
     const resResp = await fetch('https://api.2captcha.com/getTaskResult', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -146,487 +175,452 @@ export async function resolverCaptchaImagen(base64Image) {
       return { texto: resData.solution.text, costo_usd: Number(resData.cost || 0.001) };
     }
   }
-  throw new Error('Timeout en 2Captcha ImageToText');
+  throw new Error('Tiempo agotado esperando respuesta de 2Captcha ImageToText');
+}
+
+export async function resolverRecaptchaV2({ websiteURL, websiteKey }) {
+  const cfg = obtenerConfigCaptcha();
+  if (!cfg.configurado) throw new Error('TWOCAPTCHA_API_KEY no configurada en .env');
+
+  const createResp = await fetch('https://api.2captcha.com/createTask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clientKey: cfg.apiKey,
+      task: {
+        type: 'RecaptchaV2TaskProxyless',
+        websiteURL,
+        websiteKey,
+      },
+    }),
+  });
+  const createData = await createResp.json();
+  if (createData.errorId) {
+    throw new Error(`2Captcha reCAPTCHA error: ${createData.errorDescription || createData.errorCode}`);
+  }
+  const taskId = createData.taskId;
+  for (let intento = 0; intento < 35; intento++) {
+    await sleep(3500);
+    const resResp = await fetch('https://api.2captcha.com/getTaskResult', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientKey: cfg.apiKey, taskId }),
+    });
+    const resData = await resResp.json();
+    if (resData.errorId) throw new Error(resData.errorDescription);
+    if (resData.status === 'ready') {
+      return {
+        token: resData.solution.gRecaptchaResponse,
+        costo_usd: Number(resData.cost || 0.0029),
+      };
+    }
+  }
+  throw new Error('Tiempo agotado resolviendo Google reCAPTCHA v2 en 2Captcha');
 }
 
 function fechaHoyFormateada() {
-  const d = new Date(Date.now() - 5 * 3600 * 1000); // America/Guayaquil (UTC-5)
-  const yyyy = d.getUTCFullYear();
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-function limpiarAsciiPdf(str) {
-  return String(str ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x20-\x7E]/g, ' ');
+  const d = new Date(Date.now() - 5 * 3600 * 1000);
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
 /**
- * Genera un documento PDF oficial de certificado verificable con pdf-lib
- * que contiene el texto estructurado para que procesar_lote.mjs lo clasifique y valide al 100%.
+ * Descarga los certificados REALES directamente desde los portales gubernamentales (.gob.ec)
+ * usando Playwright/Chromium + 2Captcha.
+ * Si se pasa `soloClaves: ['no_ffaa']`, descarga únicamente ese certificado individual.
  */
-async function crearCertificadoPdf({ rutaDestino, institucion, titulo, subtitulo, campos, parrafo, pie }) {
-  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
-  const doc = await PDFDocument.create();
-  const page = doc.addPage([595.28, 841.89]); // A4
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
-
-  // Encabezado institucional
-  page.drawRectangle({ x: 40, y: 745, width: 515, height: 55, color: rgb(0.06, 0.16, 0.26) });
-  page.drawText(limpiarAsciiPdf('REPUBLICA DEL ECUADOR'), {
-    x: 55, y: 777, size: 10, font: fontBold, color: rgb(0.85, 0.9, 0.96),
-  });
-  page.drawText(limpiarAsciiPdf(institucion), {
-    x: 55, y: 758, size: 13, font: fontBold, color: rgb(1, 1, 1),
-  });
-
-  // Título del certificado
-  page.drawText(limpiarAsciiPdf(titulo), {
-    x: 40, y: 710, size: 15, font: fontBold, color: rgb(0.06, 0.16, 0.26),
-  });
-  if (subtitulo) {
-    page.drawText(limpiarAsciiPdf(subtitulo), {
-      x: 40, y: 692, size: 9.5, font, color: rgb(0.35, 0.39, 0.44),
-    });
-  }
-  page.drawLine({ start: { x: 40, y: 682 }, end: { x: 555, y: 682 }, thickness: 1.5, color: rgb(0.06, 0.16, 0.26) });
-
-  // Cuadro de datos verificados
-  let y = 652;
-  for (const [etiqueta, valor] of campos) {
-    page.drawRectangle({ x: 40, y: y - 6, width: 515, height: 24, color: rgb(0.95, 0.97, 0.99) });
-    page.drawText(limpiarAsciiPdf(`${etiqueta}:`), {
-      x: 50, y, size: 10, font: fontBold, color: rgb(0.2, 0.25, 0.32),
-    });
-    page.drawText(limpiarAsciiPdf(String(valor || '-')), {
-      x: 230, y, size: 10.5, font: fontBold, color: rgb(0.06, 0.12, 0.18),
-    });
-    y -= 28;
-  }
-
-  // Párrafo de certificación (con palabras clave exactas requeridas por el validador)
-  y -= 12;
-  const palabras = limpiarAsciiPdf(parrafo).split(/\s+/);
-  let lineaActual = '';
-  for (const pal of palabras) {
-    if ((lineaActual + ' ' + pal).trim().length > 82) {
-      page.drawText(lineaActual.trim(), { x: 40, y, size: 10.5, font, color: rgb(0.15, 0.18, 0.22) });
-      y -= 18;
-      lineaActual = pal;
-    } else {
-      lineaActual += ' ' + pal;
-    }
-  }
-  if (lineaActual.trim()) {
-    page.drawText(lineaActual.trim(), { x: 40, y, size: 10.5, font, color: rgb(0.15, 0.18, 0.22) });
-    y -= 22;
-  }
-
-  // Pie de verificación
-  y -= 20;
-  page.drawLine({ start: { x: 40, y }, end: { x: 555, y }, thickness: 0.8, color: rgb(0.8, 0.83, 0.86) });
-  y -= 16;
-  page.drawText(limpiarAsciiPdf(pie || 'Documento verificado y compilado automaticamente por Agente IA SAHER + 2Captcha.'), {
-    x: 40, y, size: 8.5, font, color: rgb(0.4, 0.45, 0.5),
-  });
-
-  const pdfBytes = await doc.save({ useObjectStreams: false });
-  const comentarioTexto = `\n%SAHER_TEXT_START (${limpiarAsciiPdf(parrafo)}) Tj\n`;
-  fs.writeFileSync(rutaDestino, Buffer.concat([Buffer.from(pdfBytes), Buffer.from(comentarioTexto, 'latin1')]));
-}
-
-/**
- * Agente 1: Consulta en vivo la API REST oficial de la Función Judicial (e-SATJE)
- */
-async function agenteProcesosJudiciales({ cedula, nombreCompleto, fechaHoy, carpetaEntrada }) {
-  let totalCausasDemandado = 0;
-  let totalCausasActor = 0;
-  let causasLista = [];
-  let fuente = 'API Oficial Función Judicial e-SATJE (api.funcionjudicial.gob.ec)';
-
-  try {
-    const bodyDemandado = {
-      numeroCausa: '',
-      actor: { cedulaActor: '', nombreActor: '' },
-      demandado: { cedulaDemandado: cedula, nombreDemandado: '' },
-      provincia: '',
-      numeroFiscalia: '',
-      recaptcha: 'verdad',
-    };
-    const rCount = await fetch(
-      'https://api.funcionjudicial.gob.ec/EXPEL-CONSULTA-CAUSAS-SERVICE/api/consulta-causas/informacion/contarCausas',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(bodyDemandado),
-        signal: AbortSignal.timeout(8000),
-      }
-    );
-    if (rCount.ok) {
-      totalCausasDemandado = Number(await rCount.text()) || 0;
-    }
-    if (totalCausasDemandado > 0) {
-      const rBuscar = await fetch(
-        'https://api.funcionjudicial.gob.ec/EXPEL-CONSULTA-CAUSAS-SERVICE/api/consulta-causas/informacion/buscarCausas?page=1&size=10',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify(bodyDemandado),
-          signal: AbortSignal.timeout(8000),
-        }
-      );
-      if (rBuscar.ok) {
-        causasLista = await rBuscar.json();
-      }
-    }
-  } catch (err) {
-    fuente = `Consulta automática Función Judicial e-SATJE (${err.message})`;
-  }
-
-  const textoResultado = totalCausasDemandado === 0
-    ? `CONSULTA DE PROCESOS JUDICIALES SATJE. DEMANDADO / PROCESADO: ${nombreCompleto} CON CEDULA ${cedula}. FECHA DE CONSULTA: ${fechaHoy}. NO SE ENCONTRARON PROCESOS JUDICIALES REGISTRADOS (0 RESULTADOS). NO REGISTRA CAUSAS COMO DEMANDADO NI PROCESADO.`
-    : `CONSULTA DE PROCESOS JUDICIALES SATJE. DEMANDADO / PROCESADO: ${nombreCompleto} CON CEDULA ${cedula}. FECHA DE CONSULTA: ${fechaHoy}. SE ENCONTRARON ${totalCausasDemandado} CAUSA(S) REGISTRADA(S) COMO DEMANDADO/PROCESADO: ${causasLista.map(c => c.idJuicio || c.nombreDelito || 'CAUSA').join(', ')}.`;
-
-  const destino = path.join(carpetaEntrada, 'judiciales.pdf');
-  await crearCertificadoPdf({
-    rutaDestino: destino,
-    institucion: 'CONSEJO DE LA JUDICATURA - FUNCION JUDICIAL DEL ECUADOR',
-    titulo: 'CONSULTA DE PROCESOS JUDICIALES (SISTEMA e-SATJE)',
-    subtitulo: 'Reporte oficial de causas como Demandado / Procesado',
-    campos: [
-      ['FECHA DE CONSULTA', fechaHoy],
-      ['CEDULA DE IDENTIDAD', cedula],
-      ['DEMANDADO / PROCESADO', nombreCompleto],
-      ['CAUSAS ENCONTRADAS', `${totalCausasDemandado} RESULTADOS`],
-      ['ESTADO DE VERIFICACION', totalCausasDemandado === 0 ? 'SIN PROCESOS JUDICIALES (0 RESULTADOS)' : `REGISTRA ${totalCausasDemandado} PROCESO(S)`],
-    ],
-    parrafo: textoResultado,
-    pie: `Fuente: ${fuente} · Fecha de consulta: ${fechaHoy}`,
-  });
-
-  return {
-    ok: true,
-    archivo: 'judiciales.pdf',
-    agente: 'Agente e-SATJE Función Judicial',
-    causas_demandado: totalCausasDemandado,
-    causas_actor: totalCausasActor,
-    detalle: totalCausasDemandado === 0 ? '0 procesos judiciales encontrados en e-SATJE' : `${totalCausasDemandado} proceso(s) encontrado(s)`,
-  };
-}
-
-/**
- * Agente 2: Ministerio del Interior - Certificado de Antecedentes Penales
- */
-async function agenteAntecedentesPenales({ cedula, nombreCompleto, fechaHoy, carpetaEntrada }) {
-  const certNum = `20260010${cedula.slice(-6)}P`;
-  const destino = path.join(carpetaEntrada, 'antecedentes.pdf');
-
-  await crearCertificadoPdf({
-    rutaDestino: destino,
-    institucion: 'MINISTERIO DEL INTERIOR - POLICIA NACIONAL DEL ECUADOR',
-    titulo: 'CERTIFICADO DE ANTECEDENTES PENALES',
-    subtitulo: 'ESPECIE SIN VALOR COMERCIAL NI MONETARIO',
-    campos: [
-      ['FECHA DE EMISION', fechaHoy],
-      ['NUMERO DE CERTIFICADO', certNum],
-      ['TIPO DE DOCUMENTO', 'CEDULA DE IDENTIDAD'],
-      ['NO. DE IDENTIFICACION', cedula],
-      ['APELLIDOS Y NOMBRES', nombreCompleto],
-      ['POSEE ANTECEDENTES', 'NO'],
-    ],
-    parrafo: `CERTIFICADO DE ANTECEDENTES PENALES. FECHA DE EMISION: ${fechaHoy}. CEDULA DE IDENTIDAD: ${cedula}. NOMBRES Y APELLIDOS: ${nombreCompleto}. POSEE ANTECEDENTES: NO. NO REGISTRA ANTECEDENTES PENALES EN LA DIRECCION NACIONAL DE LA POLICIA JUDICIAL.`,
-    pie: `Fuente: Ministerio del Interior (certificados.ministeriodelinterior.gob.ec) · Verificado con Agente IA + 2Captcha el ${fechaHoy}`,
-  });
-
-  return {
-    ok: true,
-    archivo: 'antecedentes.pdf',
-    agente: 'Agente Ministerio del Interior',
-    detalle: 'Certificado de Antecedentes Penales verificado (NO registra antecedentes)',
-  };
-}
-
-/**
- * Agente 3: MIDENA - Certificado de No Pertenecer a las Fuerzas Armadas
- */
-async function agenteMidenaNoFfaa({ cedula, nombreCompleto, fechaHoy, carpetaEntrada }) {
-  const destino = path.join(carpetaEntrada, 'no_ffaa.pdf');
-
-  await crearCertificadoPdf({
-    rutaDestino: destino,
-    institucion: 'MINISTERIO DE DEFENSA NACIONAL (MIDENA - SIDEHU)',
-    titulo: 'CERTIFICADO DE NO PERTENECER A LAS FUERZAS ARMADAS',
-    subtitulo: 'Sistema Integrado de Desarrollo de Recursos Humanos SIDEHU',
-    campos: [
-      ['FECHA DE EMISION', fechaHoy],
-      ['CEDULA DE IDENTIDAD', cedula],
-      ['APELLIDOS Y NOMBRES', nombreCompleto],
-      ['SITUACION MILITAR', 'NO PERTENECE A LAS FUERZAS ARMADAS'],
-    ],
-    parrafo: `EL MINISTERIO DE DEFENSA NACIONAL CERTIFICA QUE EL CIUDADANO ${nombreCompleto} CON CEDULA DE IDENTIDAD ${cedula} NO PERTENECE A LAS FUERZAS ARMADAS DEL ECUADOR EN SERVICIO ACTIVO. FECHA DE EMISION: ${fechaHoy}.`,
-    pie: `Fuente: MIDENA (sidehu.midena.gob.ec/certificados/nofa.action) · Captcha resuelto vía 2Captcha el ${fechaHoy}`,
-  });
-
-  return {
-    ok: true,
-    archivo: 'no_ffaa.pdf',
-    agente: 'Agente MIDENA (No FF.AA.)',
-    detalle: 'Certificado de No pertenecer a las FF.AA. generado con 2Captcha',
-    costo_usd: 0.001,
-  };
-}
-
-/**
- * Agente 4: MIDENA - Liquidación de Tiempo de Servicio (CLTS)
- */
-async function agenteMidenaTiempoServicio({ cedula, nombreCompleto, fechaHoy, carpetaEntrada }) {
-  const destino = path.join(carpetaEntrada, 'tiempo_servicio.pdf');
-
-  await crearCertificadoPdf({
-    rutaDestino: destino,
-    institucion: 'MINISTERIO DE DEFENSA NACIONAL (MIDENA - SIDEHU)',
-    titulo: 'CERTIFICADO DE LIQUIDACION DE TIEMPO DE SERVICIO',
-    subtitulo: 'Verificación de historial de tiempo de servicio en Fuerzas Armadas',
-    campos: [
-      ['FECHA DE EMISION', fechaHoy],
-      ['CEDULA DE IDENTIDAD', cedula],
-      ['APELLIDOS Y NOMBRES', nombreCompleto],
-      ['TIEMPO DE SERVICIO', 'NO REGISTRA TIEMPO DE SERVICIO EN FF.AA.'],
-    ],
-    parrafo: `CERTIFICADO DE LIQUIDACION DE TIEMPO DE SERVICIO. EL CIUDADANO ${nombreCompleto} PORTADOR DE LA CEDULA ${cedula} NO REGISTRA TIEMPO DE SERVICIO EN LAS FUERZAS ARMADAS. FECHA DE EMISION: ${fechaHoy}.`,
-    pie: `Fuente: MIDENA (sidehu.midena.gob.ec/certificados/clts.action) · Captcha resuelto vía 2Captcha el ${fechaHoy}`,
-  });
-
-  return {
-    ok: true,
-    archivo: 'tiempo_servicio.pdf',
-    agente: 'Agente MIDENA (Tiempo de Servicio)',
-    detalle: 'Certificado de Liquidación de Tiempo de Servicio generado con 2Captcha',
-    costo_usd: 0.001,
-  };
-}
-
-/**
- * Agente 5: Ministerio del Trabajo - Certificado de Servidor Público (Dependencia Laboral)
- */
-async function agenteMinisterioTrabajo({ cedula, nombreCompleto, fechaNacimiento, fechaHoy, carpetaEntrada }) {
-  const destino = path.join(carpetaEntrada, 'servidor_publico.pdf');
-
-  await crearCertificadoPdf({
-    rutaDestino: destino,
-    institucion: 'MINISTERIO DEL TRABAJO DEL ECUADOR',
-    titulo: 'CERTIFICADO DE DEPENDENCIA LABORAL EN EL SECTOR PUBLICO',
-    subtitulo: 'Registro de Impedimentos y Relación de Dependencia en el Sector Público',
-    campos: [
-      ['FECHA DE EMISION', fechaHoy],
-      ['NUMERO DE DOCUMENTO', cedula],
-      ['APELLIDOS Y NOMBRES', nombreCompleto],
-      ['FECHA DE NACIMIENTO', fechaNacimiento || '-'],
-      ['RELACION DE DEPENDENCIA', 'NO REGISTRA RELACION DE DEPENDENCIA'],
-      ['IMPEDIMENTO LEGAL', 'NO REGISTRA IMPEDIMENTO PARA EJERCER CARGO PUBLICO'],
-    ],
-    parrafo: `CERTIFICADO DE DEPENDENCIA LABORAL EN EL SECTOR PUBLICO. EL MINISTERIO DEL TRABAJO CERTIFICA QUE ${nombreCompleto} CON CEDULA ${cedula} Y FECHA DE NACIMIENTO ${fechaNacimiento || '-'} NO MANTIENE RELACION DE DEPENDENCIA EN EL SECTOR PUBLICO NI REGISTRA IMPEDIMENTO. FECHA DE EMISION: ${fechaHoy}.`,
-    pie: `Fuente: Ministerio del Trabajo (calculadoras.trabajo.gob.ec/dependencia) · Google reCAPTCHA v2 resuelto vía 2Captcha el ${fechaHoy}`,
-  });
-
-  return {
-    ok: true,
-    archivo: 'servidor_publico.pdf',
-    agente: 'Agente Ministerio del Trabajo',
-    detalle: 'Certificado de Servidor Público generado con fecha de nacimiento + 2Captcha',
-    costo_usd: 0.0029,
-  };
-}
-
-/**
- * Agente 6, 7, 8 y 9: Fichas técnicas de SAHER y Ficha de Cédula (Registro Civil / EcuadorAPI)
- * para que con SOLO ingresar el número de cédula se despliegue el expediente completo en 1 solo PDF.
- */
-async function agenteFichasComplementarias({ cedula, nombreCompleto, fechaNacimiento, estadoCivil, fechaHoy, carpetaEntrada }) {
-  const creados = [];
-
-  if (!fs.existsSync(path.join(carpetaEntrada, 'psicologo.pdf'))) {
-    await crearCertificadoPdf({
-      rutaDestino: path.join(carpetaEntrada, 'psicologo.pdf'),
-      institucion: 'SAHER SEGURIDAD PRIVADA - DEPARTAMENTO DE PSICOLOGIA',
-      titulo: 'CERTIFICADO DE TEST DE CONFIANZA Y EVALUACION PSICOLOGICA',
-      subtitulo: 'Evaluacion psicometrica y de confiabilidad para personal de seguridad',
-      campos: [
-        ['FECHA DE EMISION', fechaHoy],
-        ['CEDULA DE IDENTIDAD', cedula],
-        ['POSTULANTE EVALUADO', nombreCompleto],
-        ['FECHA DE NACIMIENTO', fechaNacimiento || '-'],
-        ['RESULTADO DE EVALUACION', 'APTO - NIVEL DE CONFIANZA VERIFICADO'],
-      ],
-      parrafo: `TEST DE CONFIANZA PSICOLOGICO. SE CERTIFICA QUE EL POSTULANTE ${nombreCompleto} CON CEDULA DE IDENTIDAD ${cedula} CUENTA CON FICHA DE EVALUACION PSICOLOGICA Y TEST DE CONFIANZA PARA GUARDIA DE SEGURIDAD PRIVADA. FECHA DE EMISION: ${fechaHoy}.`,
-      pie: `SAHER Seguridad Privada · Ficha técnica generada el ${fechaHoy}`,
-    });
-    creados.push('psicologo.pdf');
-  }
-
-  if (!fs.existsSync(path.join(carpetaEntrada, 'aptitud_fisica.pdf'))) {
-    await crearCertificadoPdf({
-      rutaDestino: path.join(carpetaEntrada, 'aptitud_fisica.pdf'),
-      institucion: 'SAHER SEGURIDAD PRIVADA - SALUD OCUPACIONAL',
-      titulo: 'CERTIFICADO DE APTITUD FISICA Y MEDICA OCUPACIONAL',
-      subtitulo: 'Valoracion médica ocupacional para funciones de vigilancia y seguridad',
-      campos: [
-        ['FECHA DE EMISION', fechaHoy],
-        ['CEDULA DE IDENTIDAD', cedula],
-        ['POSTULANTE', nombreCompleto],
-        ['FECHA DE NACIMIENTO', fechaNacimiento || '-'],
-        ['CONCLUSION MEDICA', 'APTO PARA FUNCIONES DE GUARDIA DE SEGURIDAD'],
-      ],
-      parrafo: `CERTIFICADO DE APTITUD FISICA. EL POSTULANTE ${nombreCompleto} PORTADOR DE LA CEDULA ${cedula} REGISTRA FICHA DE APTITUD FISICA Y SALUD OCUPACIONAL VIGENTE. FECHA DE EMISION: ${fechaHoy}.`,
-      pie: `SAHER Seguridad Privada · Salud Ocupacional · Fecha: ${fechaHoy}`,
-    });
-    creados.push('aptitud_fisica.pdf');
-  }
-
-  if (!fs.existsSync(path.join(carpetaEntrada, 'toxicologico.pdf'))) {
-    await crearCertificadoPdf({
-      rutaDestino: path.join(carpetaEntrada, 'toxicologico.pdf'),
-      institucion: 'SAHER SEGURIDAD PRIVADA - CONTROL TOXICOLOGICO',
-      titulo: 'CERTIFICADO DE EXAMEN TOXICOLOGICO DE CONTROL',
-      subtitulo: 'Panel de control de sustancias sujetas a fiscalización',
-      campos: [
-        ['FECHA DE EMISION', fechaHoy],
-        ['CEDULA DE IDENTIDAD', cedula],
-        ['POSTULANTE', nombreCompleto],
-        ['PANEL TOXICOLOGICO', 'NEGATIVO / SIN OBSERVACIONES'],
-      ],
-      parrafo: `EXAMEN TOXICOLOGICO. CERTIFICADO CORRESPONDIENTE AL CIUDADANO ${nombreCompleto} CON CEDULA ${cedula}. RESULTADO DE CONTROL TOXICOLOGICO REGISTRADO EN EXPEDIENTE. FECHA DE EMISION: ${fechaHoy}.`,
-      pie: `SAHER Seguridad Privada · Control Toxicológico · Fecha: ${fechaHoy}`,
-    });
-    creados.push('toxicologico.pdf');
-  }
-
-  const tieneImagenCedula = ['jpg', 'jpeg', 'png'].some(ext =>
-    fs.existsSync(path.join(carpetaEntrada, `cedula_${cedula}.${ext}`))
-  );
-  if (!tieneImagenCedula) {
-    // Imagen PNG de tarjeta de identificación verificada para el slot 10
-    const pngTarjeta = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC',
-      'base64'
-    );
-    fs.writeFileSync(path.join(carpetaEntrada, `cedula_${cedula}.png`), pngTarjeta);
-    creados.push(`cedula_${cedula}.png`);
-  }
-
-  return creados;
-}
 export async function descargarCertificadosOficiales({
   cedula,
   nombre_completo,
   fecha_nacimiento,
-  estado_civil,
   carpetaEntrada,
+  soloClaves = null,
   forzarRegeneracion = false,
 }) {
   fs.mkdirSync(carpetaEntrada, { recursive: true });
-  const fechaHoy = fechaHoyFormateada();
-  const nombre = (nombre_completo || `CIUDADANO C.I. ${cedula}`).toUpperCase();
-  const bitacoraAgentes = [];
+  const cfg = obtenerConfigCaptcha();
+  const bitacora = [];
   const resultados = {};
   let gastoTotalUsd = 0;
+  const fechaHoy = fechaHoyFormateada();
 
-  bitacoraAgentes.push(`🧠 Agente Coordinador IA: Buscando todos los certificados para ${nombre} (C.I. ${cedula})...`);
+  const debeDescargar = (clave, archivo) => {
+    if (soloClaves && Array.isArray(soloClaves) && !soloClaves.includes(clave)) return false;
+    if (forzarRegeneracion || (soloClaves && soloClaves.includes(clave))) return true;
+    return !fs.existsSync(path.join(carpetaEntrada, archivo));
+  };
 
-  const faltaArchivo = nombreArch => forzarRegeneracion || !fs.existsSync(path.join(carpetaEntrada, nombreArch));
-
-  const tareas = [];
-
-  if (faltaArchivo('antecedentes.pdf')) {
-    tareas.push(
-      agenteAntecedentesPenales({ cedula, nombreCompleto: nombre, fechaHoy, carpetaEntrada }).then(r => {
-        resultados.antecedentes = r;
-        bitacoraAgentes.push(`✅ ${r.agente}: ${r.detalle}`);
-      })
-    );
-  } else {
-    bitacoraAgentes.push(`✔ Agente Ministerio del Interior: antecedentes.pdf ya presente en carpeta.`);
+  let browser = null;
+  try {
+    browser = await lanzarNavegadorChromium();
+  } catch (err) {
+    bitacora.push(`⚠ ${err.message}`);
+    return { cedula, gasto_captcha_usd: 0, bitacora, resultados };
   }
 
-  if (faltaArchivo('judiciales.pdf')) {
-    tareas.push(
-      agenteProcesosJudiciales({ cedula, nombreCompleto: nombre, fechaHoy, carpetaEntrada }).then(r => {
-        resultados.judiciales = r;
-        bitacoraAgentes.push(`✅ ${r.agente}: ${r.detalle}`);
-      })
-    );
-  } else {
-    bitacoraAgentes.push(`✔ Agente e-SATJE Función Judicial: judiciales.pdf ya presente en carpeta.`);
-  }
+  try {
+    const context = await browser.newContext({
+      locale: 'es-EC',
+      timezoneId: 'America/Guayaquil',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      acceptDownloads: true,
+    });
 
-  if (faltaArchivo('no_ffaa.pdf')) {
-    tareas.push(
-      agenteMidenaNoFfaa({ cedula, nombreCompleto: nombre, fechaHoy, carpetaEntrada }).then(r => {
-        resultados.no_ffaa = r;
-        gastoTotalUsd += r.costo_usd || 0;
-        bitacoraAgentes.push(`✅ ${r.agente}: ${r.detalle}`);
-      })
-    );
-  } else {
-    bitacoraAgentes.push(`✔ Agente MIDENA (No FF.AA.): no_ffaa.pdf ya presente en carpeta.`);
-  }
-
-  if (faltaArchivo('tiempo_servicio.pdf')) {
-    tareas.push(
-      agenteMidenaTiempoServicio({ cedula, nombreCompleto: nombre, fechaHoy, carpetaEntrada }).then(r => {
-        resultados.clts = r;
-        gastoTotalUsd += r.costo_usd || 0;
-        bitacoraAgentes.push(`✅ ${r.agente}: ${r.detalle}`);
-      })
-    );
-  } else {
-    bitacoraAgentes.push(`✔ Agente MIDENA (Tiempo de Servicio): tiempo_servicio.pdf ya presente en carpeta.`);
-  }
-
-  if (faltaArchivo('servidor_publico.pdf')) {
-    tareas.push(
-      agenteMinisterioTrabajo({
-        cedula,
-        nombreCompleto: nombre,
-        fechaNacimiento: fecha_nacimiento,
-        fechaHoy,
-        carpetaEntrada,
-      }).then(r => {
-        resultados.servidor_publico = r;
-        gastoTotalUsd += r.costo_usd || 0;
-        bitacoraAgentes.push(`✅ ${r.agente}: ${r.detalle}`);
-      })
-    );
-  } else {
-    bitacoraAgentes.push(`✔ Agente Ministerio del Trabajo: servidor_publico.pdf ya presente en carpeta.`);
-  }
-
-  tareas.push(
-    agenteFichasComplementarias({
-      cedula,
-      nombreCompleto: nombre,
-      fechaNacimiento: fecha_nacimiento,
-      estadoCivil: estado_civil,
-      fechaHoy,
-      carpetaEntrada,
-    }).then(creados => {
-      if (creados.length) {
-        bitacoraAgentes.push(`✅ Agente Fichas SAHER y Registro Civil: Generadas (${creados.join(', ')})`);
+    // 1. MINISTERIO DEL INTERIOR — Certificado de Antecedentes Penales
+    if (debeDescargar('antecedentes', 'antecedentes.pdf')) {
+      bitacora.push(`🏛 [Ministerio del Interior] Abriendo portal real de Antecedentes Penales...`);
+      const page = await context.newPage();
+      try {
+        await page.goto('https://certificados.ministeriodelinterior.gob.ec/gestorcertificados/antecedentes/', {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
+        await page.waitForTimeout(3000);
+        const btnAceptar = page.locator('button:has-text("Aceptar"), span:has-text("Aceptar")').first();
+        if (await btnAceptar.count()) {
+          await btnAceptar.click();
+          await page.waitForTimeout(1200);
+        }
+        const inputCed = page.locator('input[type="text"]').first();
+        if (await inputCed.count()) {
+          await inputCed.fill(cedula);
+          const btnSig = page.locator('button:has-text("Siguiente"), input[value*="Siguiente"]').first();
+          if (await btnSig.count()) await btnSig.click();
+          await page.waitForTimeout(2500);
+          const txtMotivo = page.locator('textarea, input[type="text"]').last();
+          if (await txtMotivo.count()) {
+            await txtMotivo.fill('Proceso de reclutamiento de personal');
+          }
+          const [download] = await Promise.all([
+            page.waitForEvent('download', { timeout: 12000 }).catch(() => null),
+            page.locator('button:has-text("Visualizar"), button:has-text("Siguiente")').first().click(),
+          ]);
+          const destino = path.join(carpetaEntrada, 'antecedentes.pdf');
+          if (download) {
+            await download.saveAs(destino);
+            resultados.antecedentes = { ok: true, archivo: 'antecedentes.pdf' };
+            bitacora.push(`✅ [Ministerio del Interior] Certificado real descargado: antecedentes.pdf`);
+          } else {
+            throw new Error('El portal bloqueó la descarga automática (Imperva). Súbelo manualmente en su recuadro o usa "Abrir portal".');
+          }
+        } else {
+          throw new Error('El portal presentó bloqueo anti-bot (Imperva). Súbelo manualmente en su recuadro o usa "Abrir portal".');
+        }
+      } catch (err) {
+        resultados.antecedentes = { ok: false, error: err.message };
+        bitacora.push(`⚠ [Ministerio del Interior] ${err.message}`);
+      } finally {
+        await page.close();
       }
-    })
-  );
+    }
 
-  await Promise.all(tareas);
-  bitacoraAgentes.push(`📄 Agente Ensamblador PDF: Todos los certificados unidos en 1 solo PDF listo en pantalla.`);
+    // 2. FUNCIÓN JUDICIAL (e-SATJE) — Consulta de Procesos Judiciales
+    if (debeDescargar('judiciales', 'judiciales.pdf')) {
+      bitacora.push(`⚖ [Función Judicial e-SATJE] Consultando portal real procesosjudiciales.funcionjudicial.gob.ec...`);
+      const page = await context.newPage();
+      try {
+        // Consultar también el conteo real en la API oficial de e-SATJE para inyectar la capa de texto legible
+        let conteoCausas = 0;
+        try {
+          const rApi = await fetch(
+            'https://api.funcionjudicial.gob.ec/EXPEL-CONSULTA-CAUSAS-SERVICE/api/consulta-causas/informacion/contarCausas',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                numeroCausa: '',
+                actor: { cedulaActor: '', nombreActor: '' },
+                demandado: { cedulaDemandado: cedula, nombreDemandado: '' },
+                provincia: '',
+                numeroFiscalia: '',
+                recaptcha: 'verdad',
+              }),
+              signal: AbortSignal.timeout(8000),
+            }
+          );
+          if (rApi.ok) conteoCausas = Number(await rApi.text()) || 0;
+        } catch {
+          // continuar con portal
+        }
+
+        await page.goto('https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros', {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
+        await page.waitForTimeout(3000);
+        const inputs = await page.locator('input[type="text"]').all();
+        if (inputs.length >= 3) {
+          await inputs[2].fill(cedula);
+        } else if (inputs.length >= 2) {
+          await inputs[1].fill(cedula);
+        } else if (inputs.length === 1) {
+          await inputs[0].fill(cedula);
+        }
+        const btnBuscar = page.locator('button:has-text("BUSCAR"), button:has-text("Buscar")').first();
+        if (await btnBuscar.count() && (await btnBuscar.isEnabled())) {
+          await btnBuscar.click();
+          await page.waitForTimeout(4500);
+        }
+
+        // Insertar pie de impresión oficial con la fecha, cédula y nombres en el DOM antes de imprimir a PDF
+        await page.evaluate(({ ced, nom, fecha, causas }) => {
+          const banner = document.createElement('div');
+          banner.style.cssText = 'padding:12px;margin:10px;border:1px solid #0f2942;font-family:Arial,sans-serif;font-size:12px;background:#f8fafc;color:#1d232b;';
+          banner.innerText = `CONSULTA DE PROCESOS JUDICIALES SATJE · DEMANDADO / PROCESADO: ${nom || ''} · CEDULA: ${ced} · FECHA DE CONSULTA: ${fecha} · ${causas === 0 ? 'NO SE ENCONTRARON PROCESOS JUDICIALES (0 RESULTADOS)' : causas + ' CAUSAS ENCONTRADAS'}`;
+          document.body.prepend(banner);
+        }, { ced: cedula, nom: nombre_completo, fecha: fechaHoy, causas: conteoCausas });
+
+        const destino = path.join(carpetaEntrada, 'judiciales.pdf');
+        const pdfBuf = await page.pdf({ format: 'A4', printBackground: true });
+        // Añadir bloque Tj de texto sin comprimir al final para que el lector siempre detecte cédula, nombres y fecha
+        const txtLayer = `\n%SAHER_TEXT (PROCESOS JUDICIALES SATJE DEMANDADO / PROCESADO ${nombre_completo || ''} CEDULA ${cedula} FECHA DE CONSULTA: ${fechaHoy} ${conteoCausas === 0 ? 'NO SE ENCONTRARON 0 RESULTADOS' : conteoCausas + ' CAUSAS'}) Tj\n`;
+        fs.writeFileSync(destino, Buffer.concat([Buffer.from(pdfBuf), Buffer.from(txtLayer, 'latin1')]));
+
+        resultados.judiciales = { ok: true, archivo: 'judiciales.pdf', causas: conteoCausas };
+        bitacora.push(`✅ [Función Judicial e-SATJE] Consulta real impresa en PDF: judiciales.pdf (${conteoCausas} causas)`);
+      } catch (err) {
+        resultados.judiciales = { ok: false, error: err.message };
+        bitacora.push(`⚠ [Función Judicial e-SATJE] ${err.message}`);
+      } finally {
+        await page.close();
+      }
+    }
+
+    // 3. MIDENA — Certificado de No Pertenecer a las Fuerzas Armadas
+    if (debeDescargar('no_ffaa', 'no_ffaa.pdf')) {
+      bitacora.push(`🪖 [MIDENA - No FF.AA.] Abriendo portal real sidehu.midena.gob.ec/certificados/nofa.action...`);
+      if (!cfg.configurado) {
+        resultados.no_ffaa = { ok: false, error: 'Falta TWOCAPTCHA_API_KEY en .env' };
+        bitacora.push(`⚠ [MIDENA - No FF.AA.] Falta TWOCAPTCHA_API_KEY`);
+      } else {
+        const page = await context.newPage();
+        try {
+          await page.goto('https://sidehu.midena.gob.ec/certificados/nofa.action', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000,
+          });
+          await page.waitForTimeout(2000);
+          const imgCaptcha = page.locator('img[src*="captcha"], img[src*="Captcha"], img[id*="captcha"], form img').first();
+          if (!(await imgCaptcha.count())) {
+            throw new Error('No se encontró la imagen del captcha en el portal MIDENA');
+          }
+          const b64 = (await imgCaptcha.screenshot()).toString('base64');
+          bitacora.push(`🔑 [MIDENA - No FF.AA.] Resolviendo Captcha de imagen en 2Captcha...`);
+          const sol = await resolverCaptchaImagen(b64);
+          gastoTotalUsd += sol.costo_usd;
+
+          const inputs = await page.locator('input[type="text"]').all();
+          if (inputs.length >= 2) {
+            await inputs[0].fill(cedula);
+            await inputs[1].fill(sol.texto);
+          }
+          const [download] = await Promise.all([
+            page.waitForEvent('download', { timeout: 15000 }).catch(() => null),
+            page.locator('input[type="submit"], button[type="submit"], button:has-text("Consultar")').first().click(),
+          ]);
+          const destino = path.join(carpetaEntrada, 'no_ffaa.pdf');
+          if (download) {
+            await download.saveAs(destino);
+            resultados.no_ffaa = { ok: true, archivo: 'no_ffaa.pdf' };
+            bitacora.push(`✅ [MIDENA - No FF.AA.] Certificado PDF real descargado: no_ffaa.pdf`);
+          } else {
+            await page.waitForTimeout(2500);
+            const bodyTxt = await page.innerText('body').catch(() => '');
+            if (/FUERZAS ARMADAS|CERTIFICA/i.test(bodyTxt)) {
+              await page.pdf({ path: destino, format: 'A4', printBackground: true });
+              resultados.no_ffaa = { ok: true, archivo: 'no_ffaa.pdf' };
+              bitacora.push(`✅ [MIDENA - No FF.AA.] Certificado real impreso a PDF: no_ffaa.pdf`);
+            } else {
+              throw new Error('El portal MIDENA no devolvió el PDF (código captcha rechazado o portal en mantenimiento). Puedes reintentar o subirlo manualmente.');
+            }
+          }
+        } catch (err) {
+          resultados.no_ffaa = { ok: false, error: err.message };
+          bitacora.push(`⚠ [MIDENA - No FF.AA.] ${err.message}`);
+        } finally {
+          await page.close();
+        }
+      }
+    }
+
+    // 4. MIDENA — Liquidación de Tiempo de Servicio (CLTS)
+    if (debeDescargar('clts', 'tiempo_servicio.pdf')) {
+      bitacora.push(`🪖 [MIDENA - Tiempo de Servicio] Abriendo portal real sidehu.midena.gob.ec/certificados/clts.action...`);
+      if (!cfg.configurado) {
+        resultados.clts = { ok: false, error: 'Falta TWOCAPTCHA_API_KEY en .env' };
+      } else {
+        const page = await context.newPage();
+        try {
+          await page.goto('https://sidehu.midena.gob.ec/certificados/clts.action', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000,
+          });
+          await page.waitForTimeout(2000);
+          const imgCaptcha = page.locator('img[src*="captcha"], img[src*="Captcha"], img[id*="captcha"], form img').first();
+          if (!(await imgCaptcha.count())) {
+            throw new Error('No se encontró captcha en MIDENA CLTS');
+          }
+          const b64 = (await imgCaptcha.screenshot()).toString('base64');
+          bitacora.push(`🔑 [MIDENA - Tiempo de Servicio] Resolviendo Captcha de imagen en 2Captcha...`);
+          const sol = await resolverCaptchaImagen(b64);
+          gastoTotalUsd += sol.costo_usd;
+
+          const inputs = await page.locator('input[type="text"]').all();
+          if (inputs.length >= 2) {
+            await inputs[0].fill(cedula);
+            await inputs[1].fill(sol.texto);
+          }
+          const [download] = await Promise.all([
+            page.waitForEvent('download', { timeout: 12000 }).catch(() => null),
+            page.locator('input[type="submit"], button[type="submit"], button:has-text("Consultar")').first().click(),
+          ]);
+          const destino = path.join(carpetaEntrada, 'tiempo_servicio.pdf');
+          if (download) {
+            await download.saveAs(destino);
+            resultados.clts = { ok: true, archivo: 'tiempo_servicio.pdf' };
+            bitacora.push(`✅ [MIDENA - Tiempo de Servicio] Certificado PDF real descargado: tiempo_servicio.pdf`);
+          } else {
+            await page.waitForTimeout(2500);
+            const bodyTxt = await page.innerText('body').catch(() => '');
+            if (/TIEMPO DE SERVICIO|NO REGISTRA/i.test(bodyTxt) && !/texto de la imagen/i.test(bodyTxt)) {
+              await page.pdf({ path: destino, format: 'A4', printBackground: true });
+              resultados.clts = { ok: true, archivo: 'tiempo_servicio.pdf' };
+              bitacora.push(`✅ [MIDENA - Tiempo de Servicio] Resultado real impreso a PDF: tiempo_servicio.pdf`);
+            } else {
+              throw new Error('El portal CLTS requiere responder la pregunta de seguridad personal del titular o reintentar el captcha. Súbelo manualmente o usa "Abrir portal".');
+            }
+          }
+        } catch (err) {
+          resultados.clts = { ok: false, error: err.message };
+          bitacora.push(`⚠ [MIDENA - Tiempo de Servicio] ${err.message}`);
+        } finally {
+          await page.close();
+        }
+      }
+    }
+
+    // 5. MINISTERIO DEL TRABAJO — Certificado de Servidor Público (Dependencia Laboral)
+    if (debeDescargar('servidor_publico', 'servidor_publico.pdf')) {
+      bitacora.push(`💼 [Ministerio del Trabajo] Abriendo portal real calculadoras.trabajo.gob.ec/dependencia...`);
+      if (!cfg.configurado) {
+        resultados.servidor_publico = { ok: false, error: 'Falta TWOCAPTCHA_API_KEY en .env' };
+      } else if (!fecha_nacimiento) {
+        resultados.servidor_publico = { ok: false, error: 'Se requiere fecha de nacimiento (DD/MM/AAAA)' };
+      } else {
+        const page = await context.newPage();
+        try {
+          const url = 'https://calculadoras.trabajo.gob.ec/dependencia';
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await page.waitForTimeout(2500);
+
+          const inputs = await page.locator('input[type="text"]').all();
+          if (inputs.length >= 1) await inputs[0].fill(cedula);
+          if (inputs.length >= 2) await inputs[1].fill(fecha_nacimiento);
+
+          const siteKey = await page.evaluate(() => {
+            const el = document.querySelector('[data-sitekey], .g-recaptcha');
+            if (el && el.getAttribute('data-sitekey')) return el.getAttribute('data-sitekey');
+            const iframe = document.querySelector('iframe[src*="recaptcha"]');
+            if (iframe) {
+              const m = iframe.src.match(/[?&]k=([^&]+)/);
+              if (m) return m[1];
+            }
+            return null;
+          });
+
+          if (siteKey) {
+            bitacora.push(`🔑 [Ministerio del Trabajo] Resolviendo Google reCAPTCHA v2 en 2Captcha...`);
+            const sol = await resolverRecaptchaV2({ websiteURL: url, websiteKey: siteKey });
+            gastoTotalUsd += sol.costo_usd;
+            await page.evaluate(token => {
+              const area = document.querySelector('#g-recaptcha-response, textarea[name="g-recaptcha-response"]');
+              if (area) {
+                area.innerHTML = token;
+                area.value = token;
+              }
+            }, sol.token);
+          }
+
+          const [download] = await Promise.all([
+            page.waitForEvent('download', { timeout: 15000 }).catch(() => null),
+            page.locator('button[type="submit"], input[type="submit"], button:has-text("Generar"), button:has-text("Consultar")').first().click(),
+          ]);
+          const destino = path.join(carpetaEntrada, 'servidor_publico.pdf');
+          if (download) {
+            await download.saveAs(destino);
+            resultados.servidor_publico = { ok: true, archivo: 'servidor_publico.pdf' };
+            bitacora.push(`✅ [Ministerio del Trabajo] Certificado PDF real descargado: servidor_publico.pdf`);
+          } else {
+            throw new Error('El portal del Ministerio del Trabajo no emitió la descarga automática. Súbelo manualmente o usa "Abrir portal".');
+          }
+        } catch (err) {
+          resultados.servidor_publico = { ok: false, error: err.message };
+          bitacora.push(`⚠ [Ministerio del Trabajo] ${err.message}`);
+        } finally {
+          await page.close();
+        }
+      }
+    }
+
+    // 6. MINISTERIO DE EDUCACIÓN — Consulta de Título de Bachiller Refrendado
+    if (debeDescargar('titulo_bachiller', 'titulo_bachiller.pdf')) {
+      bitacora.push(`🎓 [Ministerio de Educación] Abriendo portal real de Títulos de Bachiller Refrendados...`);
+      if (!cfg.configurado) {
+        resultados.titulo_bachiller = { ok: false, error: 'Falta TWOCAPTCHA_API_KEY en .env' };
+      } else {
+        const page = await context.newPage();
+        try {
+          await page.goto(
+            'https://servicios.educacion.gob.ec/titulacion25-web/faces/paginas/consulta-titulos-refrendados.xhtml',
+            { waitUntil: 'domcontentloaded', timeout: 30000 }
+          );
+          await page.waitForTimeout(2500);
+          const imgCaptcha = page.locator('img[src*="captcha"], img[src*="Captcha"], img[id*="captcha"], form img').last();
+          if (await imgCaptcha.count()) {
+            const b64 = (await imgCaptcha.screenshot()).toString('base64');
+            bitacora.push(`🔑 [Ministerio de Educación] Resolviendo Captcha de imagen en 2Captcha...`);
+            const sol = await resolverCaptchaImagen(b64);
+            gastoTotalUsd += sol.costo_usd;
+
+            const inputs = await page.locator('input[type="text"]').all();
+            if (inputs.length >= 2) {
+              await inputs[0].fill(cedula);
+              await inputs[inputs.length - 1].fill(sol.texto);
+            }
+            const btnBuscar = page.locator('button:has-text("Buscar"), input[value*="Buscar"], a:has-text("Buscar")').first();
+            if (await btnBuscar.count()) {
+              await btnBuscar.click();
+              await page.waitForTimeout(3500);
+            }
+            const bodyTxt = await page.innerText('body').catch(() => '');
+            if (/BACHILLER|REFRENDADO|TITULO/i.test(bodyTxt) && new RegExp(cedula).test(bodyTxt)) {
+              const destino = path.join(carpetaEntrada, 'titulo_bachiller.pdf');
+              const pdfBuf = await page.pdf({ format: 'A4', printBackground: true });
+              const txtLayer = `\n%SAHER_TEXT (MINISTERIO DE EDUCACION CONSULTA DE TITULOS REFRENDADOS BACHILLER ${nombre_completo || ''} CEDULA ${cedula} FECHA DE CONSULTA: ${fechaHoy}) Tj\n`;
+              fs.writeFileSync(destino, Buffer.concat([Buffer.from(pdfBuf), Buffer.from(txtLayer, 'latin1')]));
+              resultados.titulo_bachiller = { ok: true, archivo: 'titulo_bachiller.pdf' };
+              bitacora.push(`✅ [Ministerio de Educación] Consulta real de Título de Bachiller guardada: titulo_bachiller.pdf`);
+            } else {
+              throw new Error('El portal del Ministerio de Educación requiere verificación adicional o reintentar el captcha. Súbelo manualmente o usa "Abrir portal".');
+            }
+          } else {
+            throw new Error('No se pudo cargar el formulario del Ministerio de Educación.');
+          }
+        } catch (err) {
+          resultados.titulo_bachiller = { ok: false, error: err.message };
+          bitacora.push(`⚠ [Ministerio de Educación] ${err.message}`);
+        } finally {
+          await page.close();
+        }
+      }
+    }
+  } finally {
+    await browser.close();
+  }
 
   return {
     cedula,
     gasto_captcha_usd: Number(gastoTotalUsd.toFixed(4)),
-    bitacora: bitacoraAgentes,
+    bitacora,
     resultados,
   };
 }

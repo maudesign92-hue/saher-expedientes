@@ -13,6 +13,9 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+const requireCjs = createRequire(import.meta.url);
 
 function encontrarNavegadorLocal() {
   const candidatos = [
@@ -58,7 +61,7 @@ async function generarPdfNativoConPdfLib(htmlStr, itemMeta = {}) {
     // Datos básicos
     page.drawText(`CEDULA: ${p.cedula || ''}`, { x: 42, y: 714, size: 10, font: fontBold });
     page.drawText(`FECHA NAC.: ${p.fecha_nacimiento || '-'}`, { x: 220, y: 714, size: 10, font: fontBold });
-    page.drawText(`DOCUMENTOS: ${exp.totales.completo} de 10 completos`, { x: 390, y: 714, size: 10, font: fontBold });
+    page.drawText(`DOCUMENTOS: ${exp.totales.completo} de 11 completos`, { x: 390, y: 714, size: 10, font: fontBold });
 
     // Totales
     page.drawRectangle({ x: 42, y: 678, width: 160, height: 24, color: rgb(0.89, 0.95, 0.91) });
@@ -194,8 +197,7 @@ async function ejecutarNodoN8n(jsCode, inputItems, contextoNodos) {
 
 async function extraerTextoPdfBuffer(buf) {
   try {
-    const pdfParseMod = await import('pdf-parse/lib/pdf-parse.js').catch(() => import('pdf-parse'));
-    const pdfParse = pdfParseMod.default || pdfParseMod;
+    const pdfParse = requireCjs('pdf-parse/lib/pdf-parse.js');
     const data = await pdfParse(buf);
     if (data?.text && data.text.trim()) return data.text;
   } catch {
@@ -403,10 +405,10 @@ export async function procesarLote({ dataDir = '/work/expedientes', cedulaFiltro
       const ensOut = await ejecutarNodoN8n(nodos['Ensamblar expediente'], generadosPdf, ctx);
       ctx['Ensamblar expediente'] = ensOut;
 
-      // 7. Unir f01..f10 en orden
+      // 7. Unir f01..f11 en orden
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `saher-${p.cedula}-`));
       const partesOrdenadas = [];
-      for (let k = 1; k <= 10; k++) {
+      for (let k = 1; k <= 11; k++) {
         const key = `f${String(k).padStart(2, '0')}`;
         const bin = ensOut[0].binary?.[key];
         if (bin?.data) {
