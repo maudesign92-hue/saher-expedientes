@@ -10,6 +10,23 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function recargarEnv() {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const eq = t.indexOf('=');
+    if (eq === -1) continue;
+    const k = t.slice(0, eq).trim();
+    const v = t.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '');
+    if (v) process.env[k] = v;
+  }
+}
 
 async function lanzarNavegadorChromium() {
   const { chromium } = await import('playwright');
@@ -26,6 +43,7 @@ async function lanzarNavegadorChromium() {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export function obtenerConfigCaptcha() {
+  recargarEnv();
   const provider = (process.env.CAPTCHA_PROVIDER || '2captcha').toLowerCase();
   const twoCaptchaKey = (process.env.TWOCAPTCHA_API_KEY || '').trim();
   const capSolverKey = (process.env.CAPSOLVER_API_KEY || '').trim();

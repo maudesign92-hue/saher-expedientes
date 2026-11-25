@@ -8,6 +8,7 @@
  */
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +49,10 @@ function cargarDotEnv() {
 cargarDotEnv();
 
 const PORT = Number(process.env.PORT || 3000);
-const DATA_DIR = path.resolve(__dirname, process.env.DATA_DIR || './expedientes');
+const ES_VERCEL = !!process.env.VERCEL;
+const DATA_DIR = ES_VERCEL
+  ? path.join(os.tmpdir(), 'saher-expedientes')
+  : path.resolve(__dirname, process.env.DATA_DIR || './expedientes');
 const RRHH_USER = process.env.RRHH_USER || 'rrhh';
 const RRHH_PASS = process.env.RRHH_PASS || 'saher2026';
 const RETENCION_MESES = Number(process.env.RETENCION_MESES || 6);
@@ -56,6 +60,14 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
 fs.mkdirSync(path.join(DATA_DIR, 'entrada'), { recursive: true });
 fs.mkdirSync(path.join(DATA_DIR, 'salida'), { recursive: true });
+
+// Si corre en Vercel (/tmp), copiar postulantes.csv de ejemplo si aún no existe
+if (ES_VERCEL && !fs.existsSync(path.join(DATA_DIR, 'postulantes.csv'))) {
+  const srcCsv = path.join(__dirname, 'ejemplos', 'postulantes.csv');
+  if (fs.existsSync(srcCsv)) {
+    fs.copyFileSync(srcCsv, path.join(DATA_DIR, 'postulantes.csv'));
+  }
+}
 
 // Almacenamiento de enlaces únicos de postulantes (vence a los 7 días)
 const ENLACES_PATH = path.join(DATA_DIR, 'enlaces.json');
@@ -299,7 +311,16 @@ function validarYGuardarArchivosSubidos(cedula, archivos) {
   return guardados;
 }
 
-const server = http.createServer(async (req, res) => {
+let inicializado = false;
+async function inicializarDatos() {
+  if (inicializado) return;
+  inicializado = true;
+  await asegurarArchivosDePrueba1712345675();
+  depurarExpedientesAntiguos();
+}
+
+export async function handleRequest(req, res) {
+  await inicializarDatos();
   // Permitir CORS por si RR. HH. abre public/index.html con doble clic (file://)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -547,17 +568,20 @@ const server = http.createServer(async (req, res) => {
     console.error('Error en servidor:', err);
     responderJson(res, 500, { ok: false, error: err.message || 'Error interno del servidor' });
   }
-});
+}
 
-await asegurarArchivosDePrueba1712345675();
-depurarExpedientesAntiguos();
-setInterval(depurarExpedientesAntiguos, 24 * 3600 * 1000).unref();
+export default handleRequest;
 
-server.listen(PORT, () => {
-  console.log(`=============================================================`);
-  console.log(`SAHER - Sistema de Expedientes de Postulantes a Guardia`);
-  console.log(`Pantalla de RR. HH.: http://localhost:${PORT}`);
-  console.log(`Usuario RR. HH.: ${RRHH_USER} | Contraseña: ${RRHH_PASS}`);
-  console.log(`Carpeta de datos: ${DATA_DIR}`);
-  console.log(`=============================================================`);
-});
+if (!ES_VERCEL) {
+  await inicializarDatos();
+  setInterval(depurarExpedientesAntiguos, 24 * 3600 * 1000).unref();
+  const server = http.createServer(handleRequest);
+  server.listen(PORT, () => {
+    console.log(`=============================================================`);
+    console.log(`SAHER - Sistema de Expedientes de Postulantes a Guardia`);
+    console.log(`Pantalla de RR. HH.: http://localhost:${PORT}`);
+    console.log(`Usuario RR. HH.: ${RRHH_USER} | Contraseña: ${RRHH_PASS}`);
+    console.log(`Carpeta de datos: ${DATA_DIR}`);
+    console.log(`=============================================================`);
+  });
+}

@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "functions": {
+    "api/index.mjs": {
+      "maxDuration": 60,
+      "includeFiles": "{codigo/**,ejemplos/**,public/**}"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.mjs" },
+    { "source": "/p/(.*)", "destination": "/api/index.mjs" },
+    { "source": "/", "destination": "/index.html" }
+  ]
+}

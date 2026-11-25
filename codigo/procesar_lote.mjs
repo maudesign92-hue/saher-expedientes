@@ -24,7 +24,101 @@ function encontrarNavegadorLocal() {
   return candidatos.find(p => fs.existsSync(p)) || null;
 }
 
-async function convertirHtmlAPdfBuffer(htmlStr, pagePlaywright = null) {
+async function generarPdfNativoConPdfLib(htmlStr, itemMeta = {}) {
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595.28, 841.89]); // A4
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  const limpiar = s => String(s || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&middot;/g, '·')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const exp = itemMeta?.expediente;
+  if (itemMeta?.tipo === 'portada' && exp) {
+    const p = exp.postulante || {};
+    page.drawText('EXPEDIENTE DE RECLUTAMIENTO - GUARDIAS DE SEGURIDAD', {
+      x: 42, y: 790, size: 9, font: fontBold, color: rgb(0.35, 0.39, 0.44),
+    });
+    page.drawText(limpiar(p.nombre_completo || 'POSTULANTE SIN NOMBRE REGISTRADO'), {
+      x: 42, y: 765, size: 18, font: fontBold, color: rgb(0.11, 0.14, 0.17),
+    });
+    page.drawText(`Expediente compilado el ${exp.fecha_proceso || ''}`, {
+      x: 42, y: 747, size: 10, font, color: rgb(0.35, 0.39, 0.44),
+    });
+    page.drawLine({ start: { x: 42, y: 736 }, end: { x: 553, y: 736 }, thickness: 2, color: rgb(0.11, 0.14, 0.17) });
+
+    // Datos básicos
+    page.drawText(`CEDULA: ${p.cedula || ''}`, { x: 42, y: 714, size: 10, font: fontBold });
+    page.drawText(`FECHA NAC.: ${p.fecha_nacimiento || '-'}`, { x: 220, y: 714, size: 10, font: fontBold });
+    page.drawText(`DOCUMENTOS: ${exp.totales.completo} de 10 completos`, { x: 390, y: 714, size: 10, font: fontBold });
+
+    // Totales
+    page.drawRectangle({ x: 42, y: 678, width: 160, height: 24, color: rgb(0.89, 0.95, 0.91) });
+    page.drawText(`${exp.totales.completo} completos`, { x: 52, y: 686, size: 10, font: fontBold, color: rgb(0.12, 0.42, 0.23) });
+
+    page.drawRectangle({ x: 215, y: 678, width: 160, height: 24, color: rgb(0.99, 0.94, 0.85) });
+    page.drawText(`${exp.totales['observación']} con observacion`, { x: 225, y: 686, size: 10, font: fontBold, color: rgb(0.54, 0.35, 0.0) });
+
+    page.drawRectangle({ x: 388, y: 678, width: 165, height: 24, color: rgb(0.98, 0.89, 0.88) });
+    page.drawText(`${exp.totales.pendiente} pendientes`, { x: 398, y: 686, size: 10, font: fontBold, color: rgb(0.61, 0.17, 0.13) });
+
+    let y = 650;
+    page.drawText('#   DOCUMENTO', { x: 42, y, size: 8.5, font: fontBold, color: rgb(0.35, 0.39, 0.44) });
+    page.drawText('ESTADO', { x: 485, y, size: 8.5, font: fontBold, color: rgb(0.35, 0.39, 0.44) });
+    y -= 8;
+    page.drawLine({ start: { x: 42, y }, end: { x: 553, y }, thickness: 1, color: rgb(0.11, 0.14, 0.17) });
+    y -= 18;
+
+    for (const s of exp.slots || []) {
+      page.drawText(`${s.orden}`, { x: 42, y, size: 9.5, font: fontBold });
+      page.drawText(limpiar(s.titulo), { x: 64, y, size: 9.5, font: fontBold });
+      page.drawText(limpiar(s.estado).toUpperCase(), { x: 485, y, size: 8.5, font: fontBold });
+      y -= 13;
+      const det = [
+        s.archivo ? `Archivo: ${s.archivo}` : '',
+        s.fecha_emision ? `Emision: ${s.fecha_emision}` : '',
+        s.vence ? `Vence: ${s.vence}` : '',
+      ].filter(Boolean).join(' · ');
+      if (det) {
+        page.drawText(limpiar(det).slice(0, 95), { x: 64, y, size: 8, font, color: rgb(0.35, 0.39, 0.44) });
+        y -= 11;
+      }
+      if (s.motivo) {
+        page.drawText(limpiar(s.motivo).slice(0, 95), { x: 64, y, size: 8, font, color: rgb(0.35, 0.39, 0.44) });
+        y -= 11;
+      }
+      y -= 6;
+      if (y < 60) break;
+    }
+  } else {
+    // Página de reserva (pendiente) o imagen de cédula
+    const lineas = htmlStr
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<\/(div|p|h1|h2|tr|span)>/gi, '\n')
+      .split('\n')
+      .map(limpiar)
+      .filter(Boolean);
+    let y = 760;
+    for (const l of lineas) {
+      page.drawText(l.slice(0, 90), { x: 45, y, size: 10.5, font });
+      y -= 20;
+      if (y < 60) break;
+    }
+  }
+
+  const bytes = await doc.save();
+  return Buffer.from(bytes);
+}
+
+async function convertirHtmlAPdfBuffer(htmlStr, pagePlaywright = null, itemMeta = {}) {
   if (pagePlaywright) {
     await pagePlaywright.setContent(htmlStr, { waitUntil: 'load' });
     const pdfBuf = await pagePlaywright.pdf({
@@ -55,7 +149,8 @@ async function convertirHtmlAPdfBuffer(htmlStr, pagePlaywright = null) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   }
-  throw new Error('No se encontró navegador (Playwright/Chrome/Edge) para generar el PDF');
+  // Fallback 100% Serverless (Vercel) con pdf-lib
+  return await generarPdfNativoConPdfLib(htmlStr, itemMeta);
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -290,7 +385,7 @@ export async function procesarLote({ dataDir = '/work/expedientes', cedulaFiltro
       for (const itemHtml of clasifOut) {
         const htmlB64 = itemHtml.binary.index.data;
         const htmlStr = Buffer.from(htmlB64, 'base64').toString('utf8');
-        const pdfBuf = await convertirHtmlAPdfBuffer(htmlStr, page);
+        const pdfBuf = await convertirHtmlAPdfBuffer(htmlStr, page, itemHtml.json);
         generadosPdf.push({
           json: itemHtml.json,
           binary: {

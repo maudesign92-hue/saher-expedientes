@@ -6,6 +6,23 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function recargarEnv() {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const eq = t.indexOf('=');
+    if (eq === -1) continue;
+    const k = t.slice(0, eq).trim();
+    const v = t.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '');
+    if (v) process.env[k] = v;
+  }
+}
 
 export function validarCedulaEcuatoriana(cedulaRaw) {
   const c = String(cedulaRaw ?? '').trim();
@@ -114,8 +131,9 @@ export function guardarPostulanteEnCsv(dataDir, postulante) {
 }
 
 export async function consultarSaldoEcuadorApi() {
+  recargarEnv();
   const apiKey = process.env.ECUADORAPI_API_KEY || '';
-  const baseUrl = (process.env.ECUADORAPI_BASE_URL || 'https://api.ecuadorapi.com/v1').replace(/\/$/, '');
+  const baseUrl = (process.env.ECUADORAPI_BASE_URL || 'https://api.ecuadorapi.com/api/v1').replace(/\/$/, '');
   if (!apiKey || apiKey === 'pon_aqui_tu_clave_de_ecuadorapi') {
     return {
       configurado: false,
@@ -138,8 +156,9 @@ export async function consultarSaldoEcuadorApi() {
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}`);
     }
-    const data = await resp.json();
-    const balance = Number(data.balance_usd ?? data.balance ?? data.saldo ?? 0);
+    const raw = await resp.json();
+    const data = raw.data || raw;
+    const balance = Number(data.credits_usd ?? data.balance_usd ?? data.balance ?? data.saldo ?? 0);
     const remaining = Number(data.remaining_queries ?? data.remaining ?? Math.floor(balance / 0.03));
     return {
       configurado: true,
@@ -158,6 +177,13 @@ export async function consultarSaldoEcuadorApi() {
       alerta_bajo_saldo: false,
     };
   }
+}
+
+function normalizarFechaNacimiento(f) {
+  const s = String(f || '').trim();
+  const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (mIso) return `${mIso[3]}/${mIso[2]}/${mIso[1]}`;
+  return s;
 }
 
 export async function obtenerIdentidadPorCedula(cedulaRaw, dataDir) {
@@ -187,8 +213,9 @@ export async function obtenerIdentidadPorCedula(cedulaRaw, dataDir) {
     };
   }
 
+  recargarEnv();
   const apiKey = process.env.ECUADORAPI_API_KEY || '';
-  const baseUrl = (process.env.ECUADORAPI_BASE_URL || 'https://api.ecuadorapi.com/v1').replace(/\/$/, '');
+  const baseUrl = (process.env.ECUADORAPI_BASE_URL || 'https://api.ecuadorapi.com/api/v1').replace(/\/$/, '');
 
   if (!apiKey || apiKey === 'pon_aqui_tu_clave_de_ecuadorapi') {
     // Asegurar fila en CSV para que el procesador pueda tomar el nombre del certificado de antecedentes si existe
@@ -217,7 +244,7 @@ export async function obtenerIdentidadPorCedula(cedulaRaw, dataDir) {
   }
 
   try {
-    const resp = await fetch(`${baseUrl}/cedula/${cedula}`, {
+    let resp = await fetch(`${baseUrl}/cedulas/${cedula}`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'x-api-key': apiKey,
@@ -225,6 +252,16 @@ export async function obtenerIdentidadPorCedula(cedulaRaw, dataDir) {
       },
       signal: AbortSignal.timeout(15000),
     });
+    if (resp.status === 404) {
+      resp = await fetch(`${baseUrl}/cedula/${cedula}`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'x-api-key': apiKey,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+    }
     if (!resp.ok) {
       throw new Error(`EcuadorAPI respondió HTTP ${resp.status}`);
     }
@@ -238,7 +275,7 @@ export async function obtenerIdentidadPorCedula(cedulaRaw, dataDir) {
       apellidos = partes.slice(0, 2).join(' ');
       nombres = partes.slice(2).join(' ');
     }
-    const fecha_nacimiento = String(payload.fecha_nacimiento || payload.fechaNacimiento || payload.birth_date || '').trim();
+    const fecha_nacimiento = normalizarFechaNacimiento(payload.fecha_nacimiento || payload.fechaNacimiento || payload.birth_date || '');
     const estado_civil = String(payload.estado_civil || payload.estadoCivil || payload.marital_status || '').trim().toUpperCase();
 
     const guardado = guardarPostulanteEnCsv(dataDir, {
