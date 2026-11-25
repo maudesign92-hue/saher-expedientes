@@ -1,0 +1,15 @@
+{
+  "name": "saher-expedientes",
+  "version": "1.0.0",
+  "description": "Sistema web simple para SAHER (Ecuador) - Armado de expedientes de postulantes a guardia con validación, EcuadorAPI y resolución de CAPTCHAs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "procesar": "node codigo/procesar_lote.mjs"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.49.0"
+  }
+}

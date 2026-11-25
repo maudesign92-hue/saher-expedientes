@@ -1,0 +1,23 @@
+{
+  local_certs
+}
+
+https:// {
+  # Enlace único del postulante: público (solo su propia cédula vía token de 7 días)
+  @postulante {
+    path /p/* /api/postulante/*
+  }
+  handle @postulante {
+    reverse_proxy saher-web:3000
+  }
+
+  # Pantalla de RR. HH.: solo red interna de la oficina (LAN / localhost)
+  @red_interna {
+    remote_ip 127.0.0.1 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+  }
+  handle @red_interna {
+    reverse_proxy saher-web:3000
+  }
+
+  respond "Acceso restringido a la red interna de SAHER" 403
+}

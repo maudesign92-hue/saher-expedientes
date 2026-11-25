@@ -1,0 +1,70 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "EcuadorAPI - Identidad y Uso",
+    "version": "1.0.0",
+    "description": "Especificación de referencia para consulta de identidad por cédula y saldo de cuenta en EcuadorAPI."
+  },
+  "servers": [
+    {
+      "url": "https://api.ecuadorapi.com/v1"
+    }
+  ],
+  "paths": {
+    "/cedula/{cedula}": {
+      "get": {
+        "summary": "Consultar datos de identidad por número de cédula",
+        "parameters": [
+          {
+            "name": "cedula",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^[0-9]{10}$" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Datos del ciudadano",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cedula": { "type": "string" },
+                    "apellidos": { "type": "string" },
+                    "nombres": { "type": "string" },
+                    "nombre_completo": { "type": "string" },
+                    "fecha_nacimiento": { "type": "string" },
+                    "estado_civil": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage": {
+      "get": {
+        "summary": "Consultar saldo y consultas disponibles",
+        "responses": {
+          "200": {
+            "description": "Estado del saldo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "balance_usd": { "type": "number" },
+                    "remaining_queries": { "type": "integer" },
+                    "cost_per_query_usd": { "type": "number", "default": 0.03 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

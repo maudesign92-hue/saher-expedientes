@@ -1,0 +1,33 @@
+services:
+  saher-web:
+    build: .
+    container_name: saher-expedientes
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=America/Guayaquil
+      - DATA_DIR=/app/expedientes
+    ports:
+      # Red interna de la oficina (cambiar a IP de LAN o usar Caddy/Nginx con HTTPS para el enlace público /p/:token)
+      - "3000:3000"
+    volumes:
+      - ./expedientes:/app/expedientes
+
+  # Proxy HTTPS opcional con Caddy: expone públicamente solo /p/* y /api/postulante/*,
+  # manteniendo la pantalla de RR. HH. (/) accesible únicamente desde la red interna de la oficina.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - saher-web
+    profiles:
+      - https
+
+volumes:
+  caddy_data:

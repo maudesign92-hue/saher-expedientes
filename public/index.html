@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAHER — Expedientes de Postulantes a Guardia (RR. HH.)</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1d232b;
+      --muted: #5b6470;
+      --border: #d7dbe0;
+      --primary: #0f2942;
+      --primary-hover: #183d61;
+      --accent: #b8860b;
+      --ok-bg: #e3f2e8;
+      --ok-txt: #1e6b3a;
+      --obs-bg: #fdf0d9;
+      --obs-txt: #8a5a00;
+      --pend-bg: #fbe3e1;
+      --pend-txt: #9b2c22;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      letter-spacing: 0.03em;
+    }
+    .brand span {
+      font-size: 0.82rem;
+      color: #cbd5e1;
+    }
+    .saldos-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .pill-saldo {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.82rem;
+    }
+    .pill-saldo.alerta {
+      background: #9b2c22;
+      border-color: #f87171;
+      font-weight: 700;
+    }
+    .container {
+      max-width: 1120px;
+      margin: 22px auto;
+      padding: 0 16px;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+      border-bottom: 2px solid var(--border);
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 10px 20px;
+      font-size: 0.98rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+      min-width: 220px;
+    }
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input[type="text"], input[type="password"] {
+      padding: 10px 12px;
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      outline: none;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: var(--primary);
+    }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      text-decoration: none;
+    }
+    .btn:hover { background: var(--primary-hover); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-sec {
+      background: #fff;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
+    .btn-sec:hover { background: #f1f5f9; }
+    .btn-captcha {
+      background: #1e6b3a;
+      color: #fff;
+    }
+    .btn-captcha:hover { background: #16522c; }
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 0.82rem;
+      border-radius: 5px;
+    }
+    .dropzone {
+      margin-top: 14px;
+      border: 2px dashed var(--border);
+      border-radius: 9px;
+      padding: 18px;
+      text-align: center;
+      background: #fafbfc;
+      cursor: pointer;
+    }
+    .dropzone.dragover {
+      border-color: var(--primary);
+      background: #eef4fa;
+    }
+    .file-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .chip {
+      background: #e2e8f0;
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chip button {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-weight: 700;
+      color: #64748b;
+    }
+    .msg-error {
+      background: var(--pend-bg);
+      color: var(--pend-txt);
+      border: 1px solid #f5c2c0;
+      padding: 10px 14px;
+      border-radius: 7px;
+      margin-top: 12px;
+      font-weight: 600;
+      display: none;
+    }
+    .grid-datos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+    .dato-box {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fafbfc;
+    }
+    .dato-box small {
+      display: block;
+      font-size: 0.74rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .dato-box strong {
+      font-size: 1.05rem;
+      display: block;
+      margin-top: 2px;
+    }
+    .fuente-tag {
+      display: inline-block;
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: #eef2f6;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-top: 4px;
+    }
+    .totales-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 14px 0;
+    }
+    .tot-card {
+      flex: 1;
+      min-width: 150px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .tot-completo { background: var(--ok-bg); color: var(--ok-txt); }
+    .tot-observacion { background: var(--obs-bg); color: var(--obs-txt); }
+    .tot-pendiente { background: var(--pend-bg); color: var(--pend-txt); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 0.92rem;
+    }
+    th {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 2px solid var(--text);
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .badge.completo { background: var(--ok-bg); color: var(--ok-txt); }
+    .badge.observación { background: var(--obs-bg); color: var(--obs-txt); }
+    .badge.pendiente { background: var(--pend-bg); color: var(--pend-txt); }
+    .portal-helper {
+      margin-top: 8px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 10px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.84rem;
+    }
+    .copy-pill {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 3px 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .enlace-box {
+      margin-top: 14px;
+      padding: 12px;
+      background: #eef6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      display: none;
+    }
+    /* Modal Login */
+    #login-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 41, 66, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+    .login-card {
+      background: #fff;
+      padding: 28px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Login de RR. HH. -->
+  <div id="login-overlay" style="display:none;">
+    <div class="login-card">
+      <h2 style="margin-top:0;">SAHER — Acceso RR. HH.</h2>
+      <p style="color:var(--muted);font-size:0.9rem;">Ingresa con tu usuario y contraseña de Recursos Humanos.</p>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Usuario</label>
+        <input type="text" id="login-user" value="rrhh" />
+      </div>
+      <div class="field" style="margin-bottom:16px;">
+        <label>Contraseña</label>
+        <input type="password" id="login-pass" value="saher2026" />
+      </div>
+      <button class="btn" style="width:100%;justify-content:center;" onclick="iniciarSesion()">Entrar al sistema</button>
+      <div id="login-err" class="msg-error"></div>
+    </div>
+  </div>
+
+  <header>
+    <div class="brand">
+      <h1>SAHER SEGURIDAD PRIVADA — EXPEDIENTES RR. HH.</h1>
+      <span>Armado y validación automática de expedientes de postulantes a guardia</span>
+    </div>
+    <div class="saldos-bar">
+      <div id="saldo-ecuadorapi" class="pill-saldo">EcuadorAPI: consultando saldo...</div>
+      <div id="saldo-captcha" class="pill-saldo">Captcha (2Captcha): consultando...</div>
+      <button class="btn btn-sm btn-sec" onclick="cerrarSesion()">Salir</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-btn-armar" onclick="cambiarTab('armar')">1. Armar Expediente</button>
+      <button class="tab-btn" id="tab-btn-postulantes" onclick="cambiarTab('postulantes')">2. Postulantes (Tabla de control)</button>
+    </div>
+
+    <!-- PESTAÑA 1: ARMAR EXPEDIENTE -->
+    <div id="tab-armar">
+      <div class="card">
+        <div class="form-row">
+          <div class="field">
+            <label for="input-cedula">Número de cédula (10 dígitos)</label>
+            <input type="text" id="input-cedula" maxlength="10" placeholder="Ej. 1712345675 o 1804625752" />
+          </div>
+          <button class="btn" id="btn-armar" onclick="armarExpediente(false)">
+            Armar expediente
+          </button>
+          <button class="btn btn-captcha" id="btn-armar-captcha" onclick="armarExpediente(true)" title="Usa Playwright + 2Captcha/CapSolver para descargar certificados de los portales oficiales">
+            🤖 Descargar certificados con Captcha y armar
+          </button>
+        </div>
+
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+          <strong>Subir archivos del postulante (PDF, JPG o PNG — máx. 10 MB c/u)</strong>
+          <div style="font-size:0.85rem;color:var(--muted);margin-top:4px;">
+            Arrastra aquí o haz clic para elegir: test psicológico, aptitud física, toxicológico, foto de la cédula y cualquier certificado descargado.
+          </div>
+          <input type="file" id="file-input" multiple accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="agregarArchivos(this.files)" />
+        </div>
+        <div class="file-chips" id="lista-archivos"></div>
+        <div id="msg-error" class="msg-error"></div>
+      </div>
+
+      <!-- RESULTADO DEL EXPEDIENTE -->
+      <div class="card" id="resultado-card" style="display:none;">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
+          <div>
+            <h2 style="margin:0;" id="res-nombre">—</h2>
+            <span class="fuente-tag" id="res-fuente">fuente: EcuadorAPI, no oficial</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            <a class="btn" id="btn-descargar-pdf" href="#" target="_blank">⬇ Descargar PDF</a>
+            <button class="btn btn-sec" onclick="generarEnlacePostulante()">📲 Enviar enlace al postulante</button>
+          </div>
+        </div>
+
+        <div id="enlace-postulante-box" class="enlace-box"></div>
+
+        <div class="grid-datos">
+          <div class="dato-box">
+            <small>Cédula</small>
+            <strong id="res-cedula">—</strong>
+          </div>
+          <div class="dato-box">
+            <small>Fecha de nacimiento <span style="font-weight:normal;">(fuente: EcuadorAPI, no oficial)</span></small>
+            <strong id="res-fnac">—</strong>
+          </div>
+          <div class="dato-box">
+            <small>Estado civil <span style="font-weight:normal;">(fuente: EcuadorAPI, no oficial)</span></small>
+            <strong id="res-ecivil">—</strong>
+          </div>
+        </div>
+
+        <div class="totales-row">
+          <div class="tot-card tot-completo" id="res-tot-completo">0 completos</div>
+          <div class="tot-card tot-observacion" id="res-tot-obs">0 con observación</div>
+          <div class="tot-card tot-pendiente" id="res-tot-pend">0 pendientes</div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px;">#</th>
+              <th>Documento y motivo / detalles</th>
+              <th style="width:130px;">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="res-tabla-docs"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PESTAÑA 2: TABLA DE CONTROL DE POSTULANTES -->
+    <div id="tab-postulantes" style="display:none;">
+      <div class="card">
+        <div class="form-row" style="margin-bottom:14px;">
+          <div class="field">
+            <label for="buscar-cedula">Buscar por cédula o nombre</label>
+            <input type="text" id="buscar-cedula" placeholder="Escribe la cédula o apellido..." oninput="filtrarTablaPostulantes()" />
+          </div>
+          <button class="btn btn-sec" onclick="cargarPostulantes()">Actualizar tabla</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Cédula</th>
+              <th>Postulante</th>
+              <th>Fecha Nac.</th>
+              <th>Estado Civil</th>
+              <th>Completos</th>
+              <th>Obs. / Pendientes</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-postulantes-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PORTALES_INFO = {
+      antecedentes: {
+        url: 'https://certificados.ministeriodelinterior.gob.ec/gestorcertificados/antecedentes/',
+        instruccion: 'Ecuatoriano: SÍ → Cédula → motivo "Proceso de reclutamiento de personal" → Visualizar Certificado',
+      },
+      judiciales: {
+        url: 'https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros',
+        instruccion: 'Pegar cédula en "Demandado / Procesado" → BUSCAR → Imprimir (Ctrl+P) como PDF',
+      },
+      no_ffaa: {
+        url: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
+        instruccion: 'Pegar cédula + texto de seguridad → Consultar → guardar PDF',
+      },
+      clts: {
+        url: 'https://sidehu.midena.gob.ec/certificados/clts.action',
+        instruccion: 'Pegar cédula + texto de seguridad → responder pregunta → guardar PDF',
+      },
+      servidor_publico: {
+        url: 'https://calculadoras.trabajo.gob.ec/dependencia',
+        instruccion: 'Pegar cédula + fecha de nacimiento (DD/MM/AAAA) → Generar → guardar PDF',
+      },
+    };
+
+    let archivosSeleccionados = [];
+    let listaPostulantesCache = [];
+    let expedienteActual = null;
+    const API_BASE = location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
+    function obtenerTokenAuth() {
+      return localStorage.getItem('saher_rrhh_auth') || btoa('rrhh:saher2026');
+    }
+
+    async function apiFetch(url, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-rrhh-auth': obtenerTokenAuth(),
+        ...(options.headers || {}),
+      };
+      const resp = await fetch(API_BASE + url, { ...options, headers });
+      if (resp.status === 401) {
+        document.getElementById('login-overlay').style.display = 'flex';
+        throw new Error('CRED_INVALIDA');
+      }
+      return resp;
+    }
+
+    async function iniciarSesion() {
+      const u = document.getElementById('login-user').value.trim();
+      const p = document.getElementById('login-pass').value;
+      const el = document.getElementById('login-err');
+      el.style.display = 'none';
+      localStorage.setItem('saher_rrhh_auth', btoa(`${u}:${p}`));
+      try {
+        const r = await apiFetch('/api/rrhh/saldos');
+        const d = await r.json();
+        if (d.ok) {
+          document.getElementById('login-overlay').style.display = 'none';
+          actualizarBarraSaldos(d.ecuadorApi, d.captcha);
+        }
+      } catch (e) {
+        if (e.message === 'CRED_INVALIDA') {
+          el.textContent = 'Usuario o contraseña incorrectos (por defecto: rrhh / saher2026).';
+        } else {
+          el.textContent = 'No se pudo conectar con el servidor en http://localhost:3000. Espera unos segundos y vuelve a intentar.';
+        }
+        el.style.display = 'block';
+      }
+    }
+
+    function cerrarSesion() {
+      localStorage.removeItem('saher_rrhh_auth');
+      document.getElementById('login-overlay').style.display = 'flex';
+    }
+
+    function actualizarBarraSaldos(ec, cap) {
+      const elEc = document.getElementById('saldo-ecuadorapi');
+      if (ec) {
+        if (!ec.configurado) {
+          elEc.textContent = 'EcuadorAPI: sin clave en .env ($0,03/cédula)';
+          elEc.classList.remove('alerta');
+        } else if (ec.balance_usd !== null) {
+          const rest = ec.remaining_queries ?? Math.floor(ec.balance_usd / 0.03);
+          elEc.textContent = `Saldo EcuadorAPI: US$ ${ec.balance_usd.toFixed(2)} (${rest} consultas)`;
+          if (rest < 20) {
+            elEc.textContent += ' ⚠ ¡Quedan menos de 20 consultas!';
+            elEc.classList.add('alerta');
+          } else {
+            elEc.classList.remove('alerta');
+          }
+        } else {
+          elEc.textContent = `EcuadorAPI: ${ec.error || 'conectado'}`;
+        }
+      }
+
+      const elCap = document.getElementById('saldo-captcha');
+      if (cap) {
+        if (!cap.configurado) {
+          elCap.textContent = '2Captcha: sin clave en .env (recarga mín. US$ 3,00)';
+        } else if (cap.balance_usd !== null) {
+          elCap.textContent = `Saldo ${cap.provider}: US$ ${cap.balance_usd.toFixed(2)} (~${cap.estimado_expedientes} exp.)`;
+        } else {
+          elCap.textContent = `${cap.provider}: ${cap.error || 'listo'}`;
+        }
+      }
+    }
+
+    function validarCedulaFrontend(c) {
+      if (!/^\d{10}$/.test(c)) return 'La cédula debe tener 10 dígitos';
+      const prov = Number(c.slice(0, 2));
+      if (!((prov >= 1 && prov <= 24) || prov === 30)) return 'Código de provincia inválido (01 a 24 o 30)';
+      if (Number(c[2]) >= 6) return 'El tercer dígito debe ser menor a 6';
+      const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+      let s = 0;
+      for (let i = 0; i < 9; i++) {
+        let v = Number(c[i]) * coef[i];
+        if (v > 9) v -= 9;
+        s += v;
+      }
+      if (((10 - (s % 10)) % 10) !== Number(c[9])) return 'Dígito verificador inválido (módulo 10)';
+      return null;
+    }
+
+    // Drag & Drop archivos
+    const dz = document.getElementById('dropzone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      dz.classList.remove('dragover');
+      if (e.dataTransfer.files) agregarArchivos(e.dataTransfer.files);
+    });
+
+    function agregarArchivos(fileList) {
+      for (const f of fileList) {
+        if (f.size > 10 * 1024 * 1024) {
+          mostrarError(`El archivo "${f.name}" supera los 10 MB.`);
+          continue;
+        }
+        archivosSeleccionados.push(f);
+      }
+      renderizarArchivosSeleccionados();
+    }
+
+    function quitarArchivo(idx) {
+      archivosSeleccionados.splice(idx, 1);
+      renderizarArchivosSeleccionados();
+    }
+
+    function renderizarArchivosSeleccionados() {
+      const cont = document.getElementById('lista-archivos');
+      cont.innerHTML = archivosSeleccionados.map((f, i) => `
+        <span class="chip">
+          📄 ${f.name} (${(f.size / 1024).toFixed(0)} KB)
+          <button onclick="quitarArchivo(${i})" title="Quitar">×</button>
+        </span>
+      `).join('');
+    }
+
+    function mostrarError(msg) {
+      const el = document.getElementById('msg-error');
+      if (!msg) {
+        el.style.display = 'none';
+        el.textContent = '';
+      } else {
+        el.textContent = msg;
+        el.style.display = 'block';
+      }
+    }
+
+    function archivoABase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function armarExpediente(descargarConCaptcha = false) {
+      mostrarError('');
+      const cedula = document.getElementById('input-cedula').value.trim();
+      const errCedula = validarCedulaFrontend(cedula);
+      if (errCedula) {
+        mostrarError(errCedula);
+        return;
+      }
+
+      const btn1 = document.getElementById('btn-armar');
+      const btn2 = document.getElementById('btn-armar-captcha');
+      btn1.disabled = true;
+      btn2.disabled = true;
+      btn1.textContent = descargarConCaptcha ? 'Descargando con Captcha y armando...' : 'Armando expediente...';
+
+      try {
+        const archivosPayload = [];
+        for (const f of archivosSeleccionados) {
+          const dataBase64 = await archivoABase64(f);
+          archivosPayload.push({ nombre: f.name, dataBase64 });
+        }
+
+        const resp = await apiFetch('/api/rrhh/armar', {
+          method: 'POST',
+          body: JSON.stringify({
+            cedula,
+            archivos: archivosPayload,
+            descargarConCaptcha,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          mostrarError(data.error || 'Error al armar el expediente');
+          return;
+        }
+
+        archivosSeleccionados = [];
+        renderizarArchivosSeleccionados();
+        if (data.saldos) actualizarBarraSaldos(data.saldos.ecuadorApi, data.saldos.captcha);
+        mostrarResultadoExpediente(data.expediente, data.identidad);
+      } catch (err) {
+        mostrarError(err.message);
+      } finally {
+        btn1.disabled = false;
+        btn2.disabled = false;
+        btn1.textContent = 'Armar expediente';
+      }
+    }
+
+    function copiarTexto(txt, btnEl) {
+      navigator.clipboard.writeText(txt);
+      const orig = btnEl.textContent;
+      btnEl.textContent = '¡Copiado!';
+      setTimeout(() => { btnEl.textContent = orig; }, 1400);
+    }
+
+    function mostrarResultadoExpediente(exp, identidad) {
+      expedienteActual = exp;
+      const card = document.getElementById('resultado-card');
+      card.style.display = 'block';
+      document.getElementById('enlace-postulante-box').style.display = 'none';
+
+      const cedula = exp.postulante.cedula;
+      const fnac = identidad?.fecha_nacimiento || exp.postulante.fecha_nacimiento || '—';
+      const ecivil = identidad?.estado_civil || '—';
+      const nombre = identidad?.nombre_completo || exp.postulante.nombre_completo || 'Postulante sin nombre registrado';
+
+      document.getElementById('res-nombre').textContent = nombre;
+      document.getElementById('res-fuente').textContent = 'fuente: EcuadorAPI, no oficial';
+      document.getElementById('res-cedula').textContent = cedula;
+      document.getElementById('res-fnac').textContent = fnac;
+      document.getElementById('res-ecivil').textContent = ecivil;
+
+      document.getElementById('res-tot-completo').textContent = `${exp.totales.completo} completos`;
+      document.getElementById('res-tot-obs').textContent = `${exp.totales['observación']} con observación`;
+      document.getElementById('res-tot-pend').textContent = `${exp.totales.pendiente} pendientes`;
+
+      document.getElementById('btn-descargar-pdf').href = `${API_BASE}/api/rrhh/pdf/${cedula}`;
+
+      const tbody = document.getElementById('res-tabla-docs');
+      tbody.innerHTML = exp.slots.map(s => {
+        const portal = PORTALES_INFO[s.clave];
+        const mostrarAyudaPortal = s.estado !== 'completo' && portal;
+        return `
+          <tr>
+            <td><b>${s.orden}</b></td>
+            <td>
+              <strong>${s.titulo}</strong>
+              ${s.archivo ? `<div style="font-size:0.83rem;color:var(--muted);">Archivo: <code>${s.archivo}</code>${s.fecha_emision ? ` · Emisión: ${s.fecha_emision}` : ''}${s.vence ? ` · Vence: ${s.vence}` : ''}</div>` : ''}
+              ${s.motivo ? `<div style="font-size:0.85rem;color:var(--muted);margin-top:3px;">${s.motivo}</div>` : ''}
+              ${mostrarAyudaPortal ? `
+                <div class="portal-helper">
+                  <a class="btn btn-sm" href="${portal.url}" target="_blank" rel="noopener">🔗 Abrir portal</a>
+                  <span class="copy-pill">
+                    Cédula: <b>${cedula}</b>
+                    <button class="btn btn-sm btn-sec" onclick="copiarTexto('${cedula}', this)">Copiar</button>
+                  </span>
+                  <span class="copy-pill">
+                    Fecha nac.: <b>${fnac}</b>
+                    <button class="btn btn-sm btn-sec" onclick="copiarTexto('${fnac}', this)">Copiar</button>
+                  </span>
+                  <span style="color:var(--muted);font-size:0.8rem;">${portal.instruccion}</span>
+                </div>
+              ` : ''}
+            </td>
+            <td><span class="badge ${s.estado}">${s.estado}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function generarEnlacePostulante() {
+      if (!expedienteActual) return;
+      const cedula = expedienteActual.postulante.cedula;
+      const resp = await apiFetch('/api/rrhh/enlace', {
+        method: 'POST',
+        body: JSON.stringify({ cedula }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        const box = document.getElementById('enlace-postulante-box');
+        const vence = new Date(data.expiraEn).toLocaleDateString('es-EC');
+        box.style.display = 'block';
+        box.innerHTML = `
+          <strong>Enlace único para el postulante (vence el ${vence} — 7 días):</strong>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;">
+            <input type="text" readonly value="${data.url}" style="flex:1;min-width:260px;" />
+            <button class="btn btn-sm" onclick="copiarTexto('${data.url}', this)">Copiar enlace</button>
+            <a class="btn btn-sm btn-sec" href="${data.url}" target="_blank">Abrir vista del postulante</a>
+          </div>
+        `;
+      }
+    }
+
+    function cambiarTab(tab) {
+      document.getElementById('tab-armar').style.display = tab === 'armar' ? 'block' : 'none';
+      document.getElementById('tab-postulantes').style.display = tab === 'postulantes' ? 'block' : 'none';
+      document.getElementById('tab-btn-armar').classList.toggle('active', tab === 'armar');
+      document.getElementById('tab-btn-postulantes').classList.toggle('active', tab === 'postulantes');
+      if (tab === 'postulantes') cargarPostulantes();
+    }
+
+    async function cargarPostulantes() {
+      const resp = await apiFetch('/api/rrhh/postulantes');
+      const data = await resp.json();
+      if (data.ok) {
+        listaPostulantesCache = data.postulantes;
+        filtrarTablaPostulantes();
+      }
+    }
+
+    function filtrarTablaPostulantes() {
+      const q = document.getElementById('buscar-cedula').value.trim().toLowerCase();
+      const filtrados = listaPostulantesCache.filter(p =>
+        p.cedula.includes(q) || (p.nombre_completo || '').toLowerCase().includes(q)
+      );
+      const tbody = document.getElementById('tabla-postulantes-body');
+      tbody.innerHTML = filtrados.map(p => {
+        const exp = p.expediente;
+        const comp = exp ? `${exp.totales.completo}/10` : 'Sin procesar';
+        const detalle = exp
+          ? `${exp.totales['observación']} obs. · ${exp.totales.pendiente} pend.`
+          : '—';
+        return `
+          <tr>
+            <td><b>${p.cedula}</b></td>
+            <td>${p.nombre_completo || '—'}</td>
+            <td>${p.fecha_nacimiento || '—'}</td>
+            <td>${p.estado_civil || '—'}</td>
+            <td><span class="badge ${exp?.totales?.completo === 10 ? 'completo' : 'observación'}">${comp}</span></td>
+            <td>${detalle}</td>
+            <td>
+              <button class="btn btn-sm" onclick="abrirPostulanteEnArmar('${p.cedula}')">Ver / Armar</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function abrirPostulanteEnArmar(cedula) {
+      cambiarTab('armar');
+      document.getElementById('input-cedula').value = cedula;
+      armarExpediente(false);
+    }
+
+    // Inicializar al abrir
+    (async () => {
+      try {
+        const r = await apiFetch('/api/rrhh/saldos');
+        const d = await r.json();
+        if (d.ok) actualizarBarraSaldos(d.ecuadorApi, d.captcha);
+      } catch {
+        document.getElementById('login-overlay').style.display = 'flex';
+      }
+    })();
+  </script>
+</body>
+</html>

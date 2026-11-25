@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAHER — Subida de Certificados del Postulante</title>
+  <style>
+    :root {
+      --primary: #0f2942;
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1d232b;
+      --muted: #5b6470;
+      --border: #d7dbe0;
+      --ok-bg: #e3f2e8;
+      --ok-txt: #1e6b3a;
+      --obs-bg: #fdf0d9;
+      --obs-txt: #8a5a00;
+      --pend-bg: #fbe3e1;
+      --pend-txt: #9b2c22;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 16px;
+      text-align: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.15rem;
+    }
+    header p {
+      margin: 4px 0 0;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+    }
+    .container {
+      max-width: 600px;
+      margin: 16px auto;
+      padding: 0 14px 32px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .lopdp-box {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.86rem;
+    }
+    .lopdp-check {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-top: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .lopdp-check input {
+      margin-top: 3px;
+      transform: scale(1.25);
+    }
+    .cert-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .cert-title {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .badge {
+      padding: 3px 9px;
+      border-radius: 12px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .badge.completo { background: var(--ok-bg); color: var(--ok-txt); }
+    .badge.observación { background: var(--obs-bg); color: var(--obs-txt); }
+    .badge.pendiente { background: var(--pend-bg); color: var(--pend-txt); }
+    .instruccion {
+      font-size: 0.86rem;
+      color: var(--muted);
+      margin: 6px 0 10px;
+    }
+    .motivo-alerta {
+      background: var(--obs-bg);
+      color: var(--obs-txt);
+      border: 1px solid #f5d491;
+      border-radius: 7px;
+      padding: 8px 10px;
+      font-size: 0.84rem;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .motivo-error {
+      background: var(--pend-bg);
+      color: var(--pend-txt);
+      border: 1px solid #f3b7b3;
+      border-radius: 7px;
+      padding: 8px 10px;
+      font-size: 0.84rem;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 9px 14px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-sec {
+      background: #fff;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SAHER SEGURIDAD PRIVADA</h1>
+    <p id="sub-postulante">Recepción de certificados del postulante</p>
+  </header>
+
+  <div class="container" id="main-container">
+    <div class="card">
+      <div class="lopdp-box">
+        <strong>Autorización de Tratamiento de Datos Personales (LOPDP)</strong>
+        <p style="margin:6px 0;">
+          En cumplimiento de la Ley Orgánica de Protección de Datos Personales del Ecuador, autorizo a SAHER Seguridad Privada a recopilar, verificar y almacenar mis certificados públicos y exámenes de selección exclusivamente para el proceso de reclutamiento como guardia de seguridad. Los expedientes no contratados se eliminan a los 6 meses.
+        </p>
+        <label class="lopdp-check">
+          <input type="checkbox" id="check-lopdp" />
+          <span>Acepto y autorizo el tratamiento de mis datos personales para este proceso de selección (obligatorio).</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="lista-certificados"></div>
+  </div>
+
+  <script>
+    const token = location.pathname.split('/').filter(Boolean).pop();
+
+    const CERTIFICADOS = [
+      {
+        clave: 'antecedentes',
+        titulo: '1. Antecedentes penales',
+        url: 'https://certificados.ministeriodelinterior.gob.ec/gestorcertificados/antecedentes/',
+        instruccion: 'Ingresa tu cédula, escribe el motivo "Proceso de reclutamiento de personal" y descarga el PDF.',
+      },
+      {
+        clave: 'judiciales',
+        titulo: '2. Procesos judiciales',
+        url: 'https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros',
+        instruccion: 'Escribe tu cédula en "Demandado / Procesado", pulsa BUSCAR e imprime el resultado como PDF.',
+      },
+      {
+        clave: 'no_ffaa',
+        titulo: '3. No pertenecer a las FF. AA.',
+        url: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
+        instruccion: 'Ingresa tu cédula y el texto de seguridad de la imagen para descargar el certificado PDF.',
+      },
+      {
+        clave: 'clts',
+        titulo: '4. Liquidación de tiempo de servicio',
+        url: 'https://sidehu.midena.gob.ec/certificados/clts.action',
+        instruccion: 'Ingresa tu cédula, el texto de seguridad y responde la pregunta personal para guardar el PDF.',
+      },
+      {
+        clave: 'servidor_publico',
+        titulo: '5. Servidor público (dependencia laboral)',
+        url: 'https://calculadoras.trabajo.gob.ec/dependencia',
+        instruccion: 'Ingresa tu cédula y tu fecha de nacimiento (DD/MM/AAAA), resuelve el captcha y descarga el PDF.',
+      },
+    ];
+
+    function archivoABase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function cargarEstado() {
+      const resp = await fetch(`/api/postulante/${token}/estado`);
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) {
+        document.getElementById('main-container').innerHTML = `
+          <div class="card"><div class="motivo-error">${data.error || 'Enlace no disponible'}</div></div>
+        `;
+        return;
+      }
+      if (data.consentimientoAceptado) {
+        document.getElementById('check-lopdp').checked = true;
+      }
+      const p = data.expediente?.postulante || {};
+      document.getElementById('sub-postulante').textContent =
+        `Postulante: ${p.nombre_completo || ''} · C.I. ${data.cedula}`;
+      renderizarCertificados(data.expediente);
+    }
+
+    function renderizarCertificados(exp) {
+      const mapaSlots = {};
+      for (const s of exp?.slots || []) mapaSlots[s.clave] = s;
+
+      const cont = document.getElementById('lista-certificados');
+      cont.innerHTML = CERTIFICADOS.map(c => {
+        const s = mapaSlots[c.clave] || { estado: 'pendiente', motivo: '' };
+        const esCompleto = s.estado === 'completo';
+        const esObs = s.estado === 'observación';
+        const tieneRechazo = s.motivo && (s.motivo.includes('no corresponde al postulante') || s.motivo.includes('Vencido'));
+
+        return `
+          <div class="card">
+            <div class="cert-header">
+              <div class="cert-title">${esCompleto ? '✅ ' : ''}${c.titulo}</div>
+              <span class="badge ${s.estado}">${esCompleto ? '✓ LISTO' : s.estado}</span>
+            </div>
+            <div class="instruccion">${c.instruccion}</div>
+            ${esObs ? `<div class="motivo-alerta">⚠ Observación: ${s.motivo}. Puedes subir un archivo nuevo para reemplazarlo.</div>` : ''}
+            ${(!esCompleto && !esObs && tieneRechazo) ? `<div class="motivo-error">❌ ${s.motivo}. Por favor sube el certificado correcto.</div>` : ''}
+            <div class="actions">
+              <a class="btn btn-sec" href="${c.url}" target="_blank" rel="noopener">1. Abrir portal oficial</a>
+              <label class="btn">
+                2. ${esCompleto ? 'Subir otro PDF' : 'Subir PDF'}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="subirCertificado('${c.clave}', this)" />
+              </label>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function subirCertificado(clave, inputEl) {
+      const file = inputEl.files?.[0];
+      if (!file) return;
+      const check = document.getElementById('check-lopdp');
+      if (!check.checked) {
+        alert('Por favor marca primero la casilla obligatoria de autorización de tratamiento de datos personales (LOPDP).');
+        inputEl.value = '';
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert('El archivo supera el tamaño máximo permitido de 10 MB.');
+        inputEl.value = '';
+        return;
+      }
+
+      const labelBtn = inputEl.parentElement;
+      const textoOrig = labelBtn.childNodes[0].textContent;
+      labelBtn.childNodes[0].textContent = 'Verificando y armando...';
+
+      try {
+        const dataBase64 = await archivoABase64(file);
+        const resp = await fetch(`/api/postulante/${token}/subir`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            consentimientoLopdp: true,
+            archivos: [{ nombre: file.name, dataBase64, slotClave: clave }],
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          alert(data.error || 'No se pudo subir el archivo.');
+          return;
+        }
+        renderizarCertificados(data.expediente);
+      } catch (e) {
+        alert('Error de conexión al subir el archivo.');
+      } finally {
+        labelBtn.childNodes[0].textContent = textoOrig;
+        inputEl.value = '';
+      }
+    }
+
+    cargarEstado();
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# Nunca subir claves ni archivos sensibles a GitHub
+.env
+.env.local
+node_modules/
+
+# Datos sensibles de postulantes reales en disco (mantener solo ejemplos/ y referencia ficticia)
+expedientes/entrada/*
+!expedientes/entrada/1712345675/
+expedientes/salida/*
+expedientes/enlaces.json
+expedientes/ultimos_expedientes.json
+referencia/1804625752*
