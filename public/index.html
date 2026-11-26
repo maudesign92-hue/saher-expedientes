@@ -838,6 +838,12 @@
         zipBase64Actual = data.zipBase64 || null;
         if (data.urlEnlaceBase) urlEnlaceBaseActual = data.urlEnlaceBase;
         mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
+
+        // Descargar automáticamente a la PC el archivo PDF de este portal al hacer clic en el botón robot
+        const slotDescargado = (data.expediente?.slots || []).find(s => s.clave === clavePortal);
+        if (slotDescargado?.archivo) {
+          descargarArchivoIndividualExistente(cedula, slotDescargado.archivo, false);
+        }
       } catch (err) {
         mostrarError(err.message);
       } finally {
