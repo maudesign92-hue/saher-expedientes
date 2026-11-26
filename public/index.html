@@ -498,7 +498,8 @@
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:10px;">
             <a class="btn" id="btn-descargar-pdf" href="#" target="_blank">⬇ Descargar Expediente en 1 solo PDF</a>
-            <button class="btn btn-gold" onclick="generarEnlacePostulante()">📲 Enviar enlace al postulante (7 días)</button>
+            <button class="btn btn-black" id="btn-descargar-zip" onclick="descargarZipCertificadosIndividuales()">📦 Descargar Todos Individuales en .ZIP</button>
+            <button class="btn btn-gold" onclick="generarEnlacePostulante()">📲 Enviar enlace general al postulante</button>
           </div>
         </div>
 
@@ -523,6 +524,22 @@
           <div class="tot-card tot-completo" id="res-tot-completo">0 completos</div>
           <div class="tot-card tot-observacion" id="res-tot-obs">0 con observación</div>
           <div class="tot-card tot-pendiente" id="res-tot-pend">0 pendientes</div>
+        </div>
+
+        <!-- BÓVEDA DE CERTIFICADOS ORIGINALES INDIVIDUALES (SIN UNIR) Y DESCARGA EN .ZIP -->
+        <div style="margin:18px 0;padding:16px;background:var(--saher-black);color:var(--saher-white);border:2px solid var(--saher-gold);border-radius:10px;">
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #333;padding-bottom:12px;margin-bottom:12px;">
+            <div>
+              <strong style="color:var(--saher-gold);font-size:1.02rem;letter-spacing:0.04em;">📁 BÓVEDA DE CERTIFICADOS ORIGINALES INDIVIDUALES (ARCHIVOS SUELTOS SIN UNIR)</strong>
+              <div style="font-size:0.82rem;color:#cbd5e1;margin-top:2px;">
+                Aquí se alojan todos los certificados originales emitidos por cada entidad. Puedes descargarlos de 1 en 1 o bajarlos todos juntos comprimidos en un solo archivo <b>.ZIP</b>.
+              </div>
+            </div>
+            <button class="btn btn-gold" onclick="descargarZipCertificadosIndividuales()">
+              📦 Descargar Todos los Certificados Individuales (.ZIP)
+            </button>
+          </div>
+          <div id="boveda-certificados-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;"></div>
         </div>
 
         <!-- TABLA DE LOS 11 DOCUMENTOS CON DESCARGA INDIVIDUAL 1 A 1 Y SUBIDA MANUAL POR ÍTEM -->
@@ -625,6 +642,7 @@
     let listaPostulantesCache = [];
     let expedienteActual = null;
     let archivosIndividualesCache = {};
+    let zipBase64Actual = null;
     let urlEnlaceBaseActual = '';
     let ultimoBlobUrl = null;
     const API_BASE = location.protocol === 'file:' ? 'http://localhost:3000' : '';
@@ -775,6 +793,7 @@
         }
         bitacoraEl.innerHTML = `<div>✅ Archivo <b>${file.name}</b> validado e integrado en el PDF único del expediente.</div>`;
         archivosIndividualesCache = data.archivosIndividuales || {};
+        zipBase64Actual = data.zipBase64 || null;
         if (data.urlEnlaceBase) urlEnlaceBaseActual = data.urlEnlaceBase;
         mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
       } catch (err) {
@@ -816,6 +835,7 @@
         }
         if (data.saldos) actualizarBarraSaldos(data.saldos.ecuadorApi, data.saldos.captcha);
         archivosIndividualesCache = data.archivosIndividuales || {};
+        zipBase64Actual = data.zipBase64 || null;
         if (data.urlEnlaceBase) urlEnlaceBaseActual = data.urlEnlaceBase;
         mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
       } catch (err) {
@@ -827,7 +847,7 @@
     }
 
     // Descargar a la PC un certificado individual ya existente
-    function descargarArchivoIndividualExistente(cedula, nombreArchivo) {
+    function descargarArchivoIndividualExistente(cedula, nombreArchivo, soloVer = false) {
       const b64 = archivosIndividualesCache[nombreArchivo];
       if (b64) {
         const binStr = atob(b64);
@@ -836,6 +856,10 @@
         const ext = (nombreArchivo.split('.').pop() || '').toLowerCase();
         const mime = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
         const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        if (soloVer) {
+          window.open(blobUrl, '_blank');
+          return;
+        }
         const a = document.createElement('a');
         a.href = blobUrl;
         a.download = `${cedula}_${nombreArchivo}`;
@@ -845,7 +869,28 @@
         setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
         return;
       }
-      window.open(`${API_BASE}/api/rrhh/certificado/${cedula}/${encodeURIComponent(nombreArchivo)}`, '_blank');
+      window.open(`${API_BASE}/api/rrhh/certificado/${cedula}/${encodeURIComponent(nombreArchivo)}${soloVer ? '?inline=1' : ''}`, '_blank');
+    }
+
+    // Descargar archivo .ZIP con TODOS los certificados originales individuales (sin unir)
+    function descargarZipCertificadosIndividuales() {
+      if (!expedienteActual) return;
+      const cedula = expedienteActual.postulante.cedula;
+      if (zipBase64Actual) {
+        const binStr = atob(zipBase64Actual);
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${cedula}_CERTIFICADOS_ORIGINALES_INDIVIDUALES.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+        return;
+      }
+      window.open(`${API_BASE}/api/rrhh/zip/${cedula}`, '_blank');
     }
 
     async function armarExpediente(descargarConCaptcha = false, soloClaves = null, forzarAgentes = false) {
@@ -892,6 +937,7 @@
 
         if (data.saldos) actualizarBarraSaldos(data.saldos.ecuadorApi, data.saldos.captcha);
         archivosIndividualesCache = data.archivosIndividuales || {};
+        zipBase64Actual = data.zipBase64 || null;
         if (data.urlEnlaceBase) urlEnlaceBaseActual = data.urlEnlaceBase;
         mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
       } catch (err) {
@@ -950,6 +996,36 @@
       btnDesc.download = exp.archivo_pdf || `${cedula}_EXPEDIENTE_SAHER.pdf`;
       document.getElementById('btn-abrir-pdf-pestana').href = urlPdf;
       document.getElementById('visor-pdf-unico').src = `${urlPdf}#view=FitH`;
+
+      // Renderizar la Bóveda de Certificados Originales Individuales (alojados por separado)
+      const bovedaGrid = document.getElementById('boveda-certificados-grid');
+      const slotsConArchivo = exp.slots.filter(s => s.clave !== 'portada' && s.archivo);
+      if (slotsConArchivo.length === 0) {
+        bovedaGrid.innerHTML = `<div style="color:#94a3b8;font-size:0.86rem;">Aún no hay certificados individuales cargados para esta cédula.</div>`;
+      } else {
+        bovedaGrid.innerHTML = slotsConArchivo.map(s => {
+          const portal = PORTALES_INFO[s.clave];
+          return `
+            <div style="background:#1e1e26;border:1px solid #3a3a46;border-left:4px solid var(--saher-red);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between;gap:8px;">
+              <div>
+                <div style="font-size:0.74rem;color:var(--saher-gold);font-weight:800;text-transform:uppercase;">
+                  ${portal ? portal.entidad : 'Documento Cargado'}
+                </div>
+                <div style="font-weight:700;font-size:0.9rem;color:#fff;margin-top:2px;">${s.titulo}</div>
+                <div style="font-size:0.78rem;color:#cbd5e1;margin-top:2px;">Archivo: <code>${s.archivo}</code></div>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-sm btn-black" style="flex:1;justify-content:center;" onclick="descargarArchivoIndividualExistente('${cedula}', '${s.archivo}', true)">
+                  👁 Ver original
+                </button>
+                <button class="btn btn-sm" style="flex:1;justify-content:center;" onclick="descargarArchivoIndividualExistente('${cedula}', '${s.archivo}', false)">
+                  ⬇ Descargar PDF
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
 
       const tbody = document.getElementById('res-tabla-docs');
       tbody.innerHTML = exp.slots.map(s => {

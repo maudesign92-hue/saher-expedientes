@@ -25,6 +25,7 @@ import {
   consultarSaldoCaptcha,
   descargarCertificadosOficiales,
 } from './codigo/descargar_portales.mjs';
+import { crearArchivoZip } from './codigo/zip_util.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -373,7 +374,8 @@ async function inicializarDatos() {
     }
     const refReal = path.join(__dirname, 'referencia', '1804625752_ZAVALA_GARCIA_DANIEL_ROBERTO.pdf');
     const destAnt = path.join(dir18, 'antecedentes.pdf');
-    if (fs.existsSync(refReal) && !fs.existsSync(destAnt)) {
+    const destPlantilla = path.join(__dirname, 'codigo', 'plantilla_interior.pdf');
+    if (fs.existsSync(refReal) && (!fs.existsSync(destAnt) || !fs.existsSync(destPlantilla))) {
       fs.mkdirSync(dir18, { recursive: true });
       const { PDFDocument } = await import('pdf-lib');
       const srcDoc = await PDFDocument.load(fs.readFileSync(refReal));
@@ -381,7 +383,9 @@ async function inicializarDatos() {
         const outDoc = await PDFDocument.create();
         const [p2] = await outDoc.copyPages(srcDoc, [1]);
         outDoc.addPage(p2);
-        fs.writeFileSync(destAnt, Buffer.from(await outDoc.save()));
+        const bytesP2 = Buffer.from(await outDoc.save());
+        if (!fs.existsSync(destAnt)) fs.writeFileSync(destAnt, bytesP2);
+        if (!fs.existsSync(destPlantilla)) fs.writeFileSync(destPlantilla, bytesP2);
       }
     }
   } catch {
@@ -489,7 +493,7 @@ export async function handleRequest(req, res) {
 
     // ── ENDPOINTS DE RR. HH. (PROTEGIDOS CON USUARIO Y CONTRASEÑA) ──
     if (pathname.startsWith('/api/rrhh/')) {
-      if (!pathname.startsWith('/api/rrhh/pdf/') && !pathname.startsWith('/api/rrhh/certificado/') && !verificarAuthRrhh(req)) {
+      if (!pathname.startsWith('/api/rrhh/pdf/') && !pathname.startsWith('/api/rrhh/certificado/') && !pathname.startsWith('/api/rrhh/zip/') && !verificarAuthRrhh(req)) {
         return responderJson(res, 401, { ok: false, error: 'Credenciales de Recursos Humanos inválidas.' });
       }
 
@@ -583,17 +587,27 @@ export async function handleRequest(req, res) {
         }
 
         const archivosIndividuales = {};
+        const entradasParaZip = [];
         const dirEntradaCedula = path.join(DATA_DIR, 'entrada', cedula);
         if (fs.existsSync(dirEntradaCedula)) {
           for (const s of exp?.slots || []) {
             if (s.archivo) {
               const pIndiv = path.join(dirEntradaCedula, s.archivo);
               if (fs.existsSync(pIndiv)) {
-                archivosIndividuales[s.archivo] = fs.readFileSync(pIndiv).toString('base64');
+                const bufIndiv = fs.readFileSync(pIndiv);
+                archivosIndividuales[s.archivo] = bufIndiv.toString('base64');
+                const numOrden = String(s.orden - 1).padStart(2, '0');
+                entradasParaZip.push({
+                  nombre: `${numOrden}_${cedula}_${s.archivo}`,
+                  buffer: bufIndiv,
+                });
               }
             }
           }
         }
+        const zipBase64 = entradasParaZip.length
+          ? crearArchivoZip(entradasParaZip).toString('base64')
+          : null;
 
         const [ecuadorApi, captcha] = await Promise.all([
           consultarSaldoEcuadorApi(),
@@ -608,6 +622,7 @@ export async function handleRequest(req, res) {
           identidad: exp?.identidad,
           expediente: exp,
           pdfBase64,
+          zipBase64,
           archivosIndividuales,
           descargaPortales,
           tokenEnlace,
@@ -655,6 +670,34 @@ export async function handleRequest(req, res) {
           'Cache-Control': 'no-store',
         });
         fs.createReadStream(rutaIndiv).pipe(res);
+        return;
+      }
+
+      // 5.B Descargar archivo .ZIP con TODOS los certificados originales individuales (sin unir en 1 PDF)
+      if (req.method === 'GET' && pathname.startsWith('/api/rrhh/zip/')) {
+        const cedula = pathname.split('/').pop().replace(/\D/g, '');
+        const dirEntradaCedula = path.join(DATA_DIR, 'entrada', cedula);
+        if (!cedula || !fs.existsSync(dirEntradaCedula)) {
+          return responderJson(res, 404, { ok: false, error: 'No hay carpeta de certificados para esta cédula.' });
+        }
+        const archivosEnCarpeta = fs.readdirSync(dirEntradaCedula).filter(f => {
+          const st = fs.statSync(path.join(dirEntradaCedula, f));
+          return st.isFile() && /\.(pdf|jpg|jpeg|png|doc|docx)$/i.test(f);
+        });
+        if (!archivosEnCarpeta.length) {
+          return responderJson(res, 404, { ok: false, error: 'No hay certificados individuales para comprimir en .ZIP.' });
+        }
+        const itemsZip = archivosEnCarpeta.map((f, idx) => ({
+          nombre: `${String(idx + 1).padStart(2, '0')}_${cedula}_${f}`,
+          buffer: fs.readFileSync(path.join(dirEntradaCedula, f)),
+        }));
+        const zipBuf = crearArchivoZip(itemsZip);
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="${cedula}_CERTIFICADOS_ORIGINALES_INDIVIDUALES.zip"`,
+          'Cache-Control': 'no-store',
+        });
+        res.end(zipBuf);
         return;
       }
 

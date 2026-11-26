@@ -32,6 +32,32 @@ async function obtenerTokenValido() {
     if (testResp.ok) return auth.token;
   }
 
+  // Intentar primero renovar con refreshToken sin pedir clic en el navegador
+  if (auth.refreshToken) {
+    try {
+      const rRef = await fetch('https://api.vercel.com/login/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: CLIENT_ID,
+          grant_type: 'refresh_token',
+          refresh_token: auth.refreshToken,
+        }).toString(),
+      });
+      const dRef = await rRef.json();
+      if (rRef.ok && dRef.access_token) {
+        auth.token = dRef.access_token;
+        if (dRef.refresh_token) auth.refreshToken = dRef.refresh_token;
+        if (dRef.expires_in) auth.expiresAt = Math.floor(Date.now() / 1000) + dRef.expires_in;
+        fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), 'utf8');
+        console.log('Token de Vercel renovado automáticamente con refreshToken.');
+        return auth.token;
+      }
+    } catch {
+      // Continuar con device auth
+    }
+  }
+
   // Usar Device Authorization Flow de Vercel OAuth
   console.log('Iniciando autorización OAuth automática con Vercel...');
   const devResp = await fetch('https://api.vercel.com/login/oauth/device-authorization', {
@@ -165,6 +191,8 @@ async function main() {
     'codigo/identidad_api.mjs',
     'codigo/procesar_lote.mjs',
     'codigo/descargar_portales.mjs',
+    'codigo/zip_util.mjs',
+    'codigo/plantilla_interior.pdf',
     'codigo/unir_pdf.py',
     'codigo/leeme.md',
     'ejemplos/postulantes.csv',
@@ -174,10 +202,13 @@ async function main() {
 
   const filesPayload = archivos
     .filter(rel => fs.existsSync(path.join(ROOT, rel)))
-    .map(rel => ({
-      file: rel,
-      data: fs.readFileSync(path.join(ROOT, rel), 'utf8'),
-    }));
+    .map(rel => {
+      const esBinario = /\.(pdf|png|jpg|jpeg)$/i.test(rel);
+      const buf = fs.readFileSync(path.join(ROOT, rel));
+      return esBinario
+        ? { file: rel, data: buf.toString('base64'), encoding: 'base64' }
+        : { file: rel, data: buf.toString('utf8') };
+    });
 
   const depResp = await fetch(`https://api.vercel.com/v13/deployments?skipAutoDetectionConfirmation=1&teamId=${TEAM_ID}`, {
     method: 'POST',

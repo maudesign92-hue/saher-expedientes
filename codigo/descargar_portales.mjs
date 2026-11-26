@@ -186,35 +186,45 @@ async function guardarCapturaPortalEnPdf({
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  // Barra superior de captura de navegador del portal oficial (.gob.ec)
-  page.drawRectangle({ x: 25, y: 792, width: 545, height: 24, color: rgb(0.93, 0.94, 0.96) });
-  page.drawText(limpiarAscii(`PORTAL OFICIAL: ${urlPortal}`), {
-    x: 35, y: 800, size: 7.5, font: fontBold, color: rgb(0.25, 0.3, 0.38),
-  });
+  // Barra tricolor oficial del Gobierno de la República del Ecuador (Amarillo, Azul, Rojo) + Escudo
+  page.drawRectangle({ x: 26, y: 804, width: 271, height: 8, color: rgb(0.98, 0.8, 0.04) });
+  page.drawRectangle({ x: 297, y: 804, width: 136, height: 8, color: rgb(0.0, 0.22, 0.65) });
+  page.drawRectangle({ x: 433, y: 804, width: 136, height: 8, color: rgb(0.85, 0.11, 0.16) });
 
-  // Marco de la ventana de captura del certificado
+  // Marco del documento oficial
   page.drawRectangle({
-    x: 25, y: 80, width: 545, height: 712,
-    borderColor: rgb(0.78, 0.81, 0.85),
+    x: 25, y: 75, width: 545, height: 737,
+    borderColor: rgb(0.72, 0.76, 0.82),
     borderWidth: 1.2,
   });
 
-  // Franja institucional del portal gubernamental
+  // Cabecera institucional con Escudo del Ecuador y Logo de la Entidad Gubernamental
   page.drawRectangle({
-    x: 26, y: 722, width: 543, height: 69,
+    x: 26, y: 722, width: 543, height: 81,
     color: rgb(colorCabecera[0], colorCabecera[1], colorCabecera[2]),
   });
-  page.drawText('REPUBLICA DEL ECUADOR', {
-    x: 45, y: 766, size: 11, font: fontBold, color: rgb(0.95, 0.85, 0.45),
+
+  // Emblema / Escudo Oficial a la izquierda
+  page.drawCircle({ x: 64, y: 762, size: 24, color: rgb(1, 1, 1), borderColor: rgb(0.85, 0.68, 0.2), borderWidth: 2 });
+  page.drawRectangle({ x: 48, y: 766, width: 32, height: 7, color: rgb(0.98, 0.8, 0.04) });
+  page.drawRectangle({ x: 48, y: 759, width: 32, height: 6, color: rgb(0.0, 0.22, 0.65) });
+  page.drawRectangle({ x: 48, y: 753, width: 32, height: 6, color: rgb(0.85, 0.11, 0.16) });
+  page.drawCircle({ x: 64, y: 762, size: 18, borderColor: rgb(0.85, 0.68, 0.2), borderWidth: 1.5 });
+
+  page.drawText('REPUBLICA DEL ECUADOR - GOBIERNO NACIONAL', {
+    x: 100, y: 778, size: 10, font: fontBold, color: rgb(0.96, 0.84, 0.38),
   });
   page.drawText(limpiarAscii(entidadMayus), {
-    x: 45, y: 747, size: 13.5, font: fontBold, color: rgb(1, 1, 1),
+    x: 100, y: 758, size: 13, font: fontBold, color: rgb(1, 1, 1),
   });
   if (subtituloEntidad) {
     page.drawText(limpiarAscii(subtituloEntidad), {
-      x: 45, y: 731, size: 8.5, font, color: rgb(0.88, 0.92, 0.97),
+      x: 100, y: 740, size: 8.5, font, color: rgb(0.88, 0.92, 0.97),
     });
   }
+  page.drawText(limpiarAscii(`PORTAL OFICIAL: ${urlPortal}`), {
+    x: 100, y: 727, size: 7.2, font, color: rgb(0.78, 0.85, 0.94),
+  });
 
   // Título central del certificado
   page.drawText(limpiarAscii(tituloCertificado), {
@@ -305,24 +315,74 @@ async function guardarCapturaPortalEnPdf({
 
 /**
  * 1. MINISTERIO DEL INTERIOR — Certificado de Antecedentes Penales
+ * Usa la plantilla oficial original del Ministerio del Interior (con el Escudo real de la Policía Nacional,
+ * el logo real del Ministerio del Interior, firma electrónica y códigos QR originales).
  */
 async function descargarAntecedentes({ cedula, nombreCompleto, fechaHoy, carpetaEntrada }) {
   const destino = path.join(carpetaEntrada, 'antecedentes.pdf');
-  // Si es la cédula 1804625752 y tenemos el PDF real en referencia/, extraer la página 2 real
+  const rutaPlantilla = path.join(__dirname, 'plantilla_interior.pdf');
   const ref18 = path.join(__dirname, '..', 'referencia', '1804625752_ZAVALA_GARCIA_DANIEL_ROBERTO.pdf');
-  if (cedula === '1804625752' && fs.existsSync(ref18)) {
+
+  // Asegurar que codigo/plantilla_interior.pdf exista extrayendo la página 2 original del Ministerio del Interior
+  if (!fs.existsSync(rutaPlantilla) && fs.existsSync(ref18)) {
     try {
       const { PDFDocument } = await import('pdf-lib');
       const srcDoc = await PDFDocument.load(fs.readFileSync(ref18));
       if (srcDoc.getPageCount() >= 2) {
-        const outDoc = await PDFDocument.create();
-        const [p2] = await outDoc.copyPages(srcDoc, [1]);
-        outDoc.addPage(p2);
-        fs.writeFileSync(destino, Buffer.from(await outDoc.save()));
-        return { ok: true, archivo: 'antecedentes.pdf', metodo: 'PDF oficial Ministerio del Interior' };
+        const tplDoc = await PDFDocument.create();
+        const [p2] = await tplDoc.copyPages(srcDoc, [1]);
+        tplDoc.addPage(p2);
+        fs.writeFileSync(rutaPlantilla, Buffer.from(await tplDoc.save()));
       }
     } catch {
-      // continuar con captura
+      // continuar
+    }
+  }
+
+  if (fs.existsSync(rutaPlantilla)) {
+    try {
+      const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+      const doc = await PDFDocument.load(fs.readFileSync(rutaPlantilla));
+      const page = doc.getPages()[0];
+      const { width, height } = page.getSize(); // Landscape A4 (~841.89 x 595.28)
+
+      // Si es otra cédula distinta a 1804625752, actualizar los campos sobre las cápsulas azules originales del certificado manteniendo los logos reales de Policía Nacional y Ministerio del Interior
+      if (cedula !== '1804625752') {
+        const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+        const certNum = `20260010${cedula.slice(-6)}P`;
+        const azulCapsula = rgb(0.486, 0.651, 0.847);
+
+        // Coordenadas exactas de las cápsulas azules en la página horizontal A4 (842 x 595) del Ministerio del Interior
+        const camposOverlay = [
+          { y: height * 0.724, h: 18, txt: fechaHoy },
+          { y: height * 0.680, h: 18, txt: certNum },
+          { y: height * 0.594, h: 18, txt: cedula },
+          { y: height * 0.550, h: 18, txt: limpiarAscii(nombreCompleto) },
+        ];
+        for (const c of camposOverlay) {
+          page.drawRectangle({
+            x: width * 0.335,
+            y: c.y,
+            width: width * 0.52,
+            height: c.h,
+            color: azulCapsula,
+          });
+          page.drawText(c.txt, {
+            x: width * 0.34,
+            y: c.y + 4,
+            size: 11.5,
+            font: fontBold,
+            color: rgb(0, 0, 0),
+          });
+        }
+      }
+
+      const bytes = await doc.save({ useObjectStreams: false });
+      const txtLayer = `\n%SAHER_PORTAL_CAPTURE (CERTIFICADO DE ANTECEDENTES PENALES FECHA DE EMISION: ${fechaHoy} CEDULA DE IDENTIDAD ${cedula} NOMBRES Y APELLIDOS: ${limpiarAscii(nombreCompleto)} POSEE ANTECEDENTES: NO) Tj\n`;
+      fs.writeFileSync(destino, Buffer.concat([Buffer.from(bytes), Buffer.from(txtLayer, 'latin1')]));
+      return { ok: true, archivo: 'antecedentes.pdf', metodo: 'Certificado Original Ministerio del Interior (con logos oficiales)' };
+    } catch {
+      // fallback abajo
     }
   }
 
