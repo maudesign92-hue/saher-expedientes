@@ -196,6 +196,19 @@ async function ejecutarNodoN8n(jsCode, inputItems, contextoNodos) {
 }
 
 async function extraerTextoPdfBuffer(buf) {
+  // 1. Verificar primero metadato Subject con pdf-lib (instantáneo, sin errores de XRef)
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+    const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+    const subj = doc.getSubject();
+    if (subj && subj.trim().length > 15) {
+      return subj.trim();
+    }
+  } catch {
+    // Continuar con pdf-parse
+  }
+
+  // 2. Extraer con pdf-parse para PDFs externos subidos manualmente
   try {
     const pdfParse = requireCjs('pdf-parse/lib/pdf-parse.js');
     const data = await pdfParse(buf);

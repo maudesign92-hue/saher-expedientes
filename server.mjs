@@ -30,6 +30,11 @@ import { crearArchivoZip } from './codigo/zip_util.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Evitar que promesas internas de pdf.js (pdf-parse) detengan el servidor ante PDFs externos con XRef no estándar
+process.on('unhandledRejection', err => {
+  console.warn('Promesa rechazada controlada:', err?.message || err);
+});
+
 // Cargar variables de .env sin dependencias externas
 function cargarDotEnv() {
   const envPath = path.join(__dirname, '.env');

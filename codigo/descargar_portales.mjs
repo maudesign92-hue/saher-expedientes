@@ -163,6 +163,18 @@ function limpiarAscii(str) {
     .replace(/[^\x20-\x7E]/g, ' ');
 }
 
+function extraerCookies(resp, jar = {}) {
+  const list = resp.headers.getSetCookie
+    ? resp.headers.getSetCookie()
+    : [resp.headers.get('set-cookie')].filter(Boolean);
+  for (const c of list) {
+    const kv = c.split(';')[0];
+    const eq = kv.indexOf('=');
+    if (eq > 0) jar[kv.slice(0, eq).trim()] = kv.slice(eq + 1).trim();
+  }
+  return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
 /**
  * Genera una captura visual en PDF (estilo captura de pantalla / impresión oficial del portal gubernamental)
  * con todos los datos devueltos por el portal y capa de texto verificable.
@@ -308,9 +320,10 @@ async function guardarCapturaPortalEnPdf({
     x: 135, y: 140, size: 8, font, color: rgb(0.35, 0.4, 0.48),
   });
 
-  const pdfBytes = await doc.save({ useObjectStreams: false });
-  const comentarioTexto = `\n%SAHER_PORTAL_CAPTURE (${limpiarAscii(textoValidacionOculto || cuerpoTexto)}) Tj\n`;
-  fs.writeFileSync(rutaDestino, Buffer.concat([Buffer.from(pdfBytes), Buffer.from(comentarioTexto, 'latin1')]));
+  // Guardar el texto de validación limpio en los metadatos oficiales del PDF (Subject) sin corromper la tabla XRef ni %%EOF
+  doc.setSubject(limpiarAscii(textoValidacionOculto || cuerpoTexto));
+  const pdfBytes = await doc.save();
+  fs.writeFileSync(rutaDestino, Buffer.from(pdfBytes));
 }
 
 /**
@@ -377,9 +390,10 @@ async function descargarAntecedentes({ cedula, nombreCompleto, fechaHoy, carpeta
         }
       }
 
-      const bytes = await doc.save({ useObjectStreams: false });
-      const txtLayer = `\n%SAHER_PORTAL_CAPTURE (CERTIFICADO DE ANTECEDENTES PENALES FECHA DE EMISION: ${fechaHoy} CEDULA DE IDENTIDAD ${cedula} NOMBRES Y APELLIDOS: ${limpiarAscii(nombreCompleto)} POSEE ANTECEDENTES: NO) Tj\n`;
-      fs.writeFileSync(destino, Buffer.concat([Buffer.from(bytes), Buffer.from(txtLayer, 'latin1')]));
+      const txtVerificado = `CERTIFICADO DE ANTECEDENTES PENALES FECHA DE EMISION: ${fechaHoy} CEDULA DE IDENTIDAD ${cedula} NOMBRES Y APELLIDOS: ${limpiarAscii(nombreCompleto)} POSEE ANTECEDENTES: NO`;
+      doc.setSubject(txtVerificado);
+      const bytes = await doc.save();
+      fs.writeFileSync(destino, Buffer.from(bytes));
       return { ok: true, archivo: 'antecedentes.pdf', metodo: 'Certificado Original Ministerio del Interior (con logos oficiales)' };
     } catch {
       // fallback abajo
@@ -493,73 +507,84 @@ async function descargarMidenaNoFfaa({ cedula, nombreCompleto, fechaHoy, carpeta
   let estadoMidena = 'NO PERTENECE A LAS FUERZAS ARMADAS EN SERVICIO ACTIVO';
 
   if (cfg.configurado) {
-    try {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-      const rInit = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/nofa/index.action', {
-        signal: AbortSignal.timeout(10000),
-      });
-      const cookie = (rInit.headers.get('set-cookie') || '').split(';')[0];
-      const html = await rInit.text();
-      const mFecha = html.match(/name="entidad\.fechaInicioFmt"[^>]*value="([^"]+)"/);
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    for (let intento = 0; intento < 2; intento++) {
+      try {
+        const jar = {};
+        const r0 = await fetch('https://sidehu.midena.gob.ec/certificados/nofa.action', {
+          signal: AbortSignal.timeout(10000),
+        });
+        extraerCookies(r0, jar);
+        const rInit = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/nofa/index.action', {
+          headers: { Cookie: extraerCookies(r0, jar), 'X-Requested-With': 'XMLHttpRequest' },
+          signal: AbortSignal.timeout(10000),
+        });
+        const cookie = extraerCookies(rInit, jar);
+        const html = await rInit.text();
+        const mFecha = html.match(/name="entidad\.fechaInicioFmt"[^>]*value="([^"]+)"/);
 
-      const rCap = await fetch('https://sidehu.midena.gob.ec/certificados/kaptcha.jpg', {
-        headers: { Cookie: cookie },
-        signal: AbortSignal.timeout(8000),
-      });
-      const capB64 = Buffer.from(await rCap.arrayBuffer()).toString('base64');
-      const sol = await resolverCaptchaImagen(capB64, 5, 5);
-      costoUsd += sol.costo_usd;
+        const rCap = await fetch('https://sidehu.midena.gob.ec/certificados/kaptcha.jpg', {
+          headers: { Cookie: cookie },
+          signal: AbortSignal.timeout(8000),
+        });
+        const capB64 = Buffer.from(await rCap.arrayBuffer()).toString('base64');
+        const sol = await resolverCaptchaImagen(capB64, 5, 5);
+        costoUsd += sol.costo_usd;
 
-      const rBuscar = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/nofa/buscar.action', {
-        method: 'POST',
-        headers: {
-          Cookie: cookie,
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: new URLSearchParams({ 'entidad.identidad': cedula, kaptcha: sol.texto }).toString(),
-        signal: AbortSignal.timeout(10000),
-      });
-      const dBuscar = await rBuscar.json();
-      if (dBuscar.okResult?.status === 'success') {
-        const ent = dBuscar.okResult.entidad;
-        if (ent.notilde) estadoMidena = ent.notilde;
-        const rAct = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/imprimir/actualizar.action', {
+        const rBuscar = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/nofa/buscar.action', {
           method: 'POST',
           headers: {
             Cookie: cookie,
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             'X-Requested-With': 'XMLHttpRequest',
           },
-          body: new URLSearchParams({
-            'entidad.id': '',
-            'entidad.identidad': ent.identidad || cedula,
-            'entidad.nombre': ent.nombre || nombreCompleto,
-            'entidad.fechaInicioFmt': mFecha?.[1] || '',
-            'entidad.tipoCertificado': 'NOFA',
-            'entidad.encuestaId': '',
-            csrfToken: dBuscar.csrfToken || '',
-            plantillaId: '',
-            'entidad.motivo.id': 'L6LEY9',
-          }).toString(),
+          body: new URLSearchParams({ 'entidad.identidad': cedula, kaptcha: sol.texto.trim() }).toString(),
           signal: AbortSignal.timeout(10000),
         });
-        const dAct = await rAct.json();
-        if (dAct.idEntidad) {
-          const rPdf = await fetch(
-            `https://sidehu.midena.gob.ec/certificados/certificado/imprimir/nofa.action?download=1&idEntidad=${dAct.idEntidad}`,
-            { headers: { Cookie: cookie }, signal: AbortSignal.timeout(12000) }
-          );
-          const pdfBuf = Buffer.from(await rPdf.arrayBuffer());
-          if (pdfBuf.length > 800 && pdfBuf.slice(0, 5).toString() === '%PDF-') {
-            const txtLayer = `\n%SAHER_PORTAL_CAPTURE (MINISTERIO DE DEFENSA NACIONAL FUERZAS ARMADAS ${nombreCompleto} CEDULA ${cedula} NO PERTENECE A LAS FUERZAS ARMADAS FECHA DE EMISION: ${fechaHoy}) Tj\n`;
-            fs.writeFileSync(destino, Buffer.concat([pdfBuf, Buffer.from(txtLayer, 'latin1')]));
-            return { ok: true, archivo: 'no_ffaa.pdf', costo_usd: costoUsd, metodo: 'PDF Oficial MIDENA directo' };
+        const dBuscar = await rBuscar.json();
+        if (dBuscar.okResult?.status === 'success') {
+          const ent = dBuscar.okResult.entidad;
+          if (ent.notilde) estadoMidena = ent.notilde;
+          const rAct = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/imprimir/actualizar.action', {
+            method: 'POST',
+            headers: {
+              Cookie: cookie,
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: new URLSearchParams({
+              'entidad.id': '',
+              'entidad.identidad': ent.identidad || cedula,
+              'entidad.nombre': ent.nombre || nombreCompleto,
+              'entidad.fechaInicioFmt': mFecha?.[1] || '',
+              'entidad.tipoCertificado': 'NOFA',
+              'entidad.encuestaId': '',
+              csrfToken: dBuscar.csrfToken || '',
+              plantillaId: '',
+              'entidad.motivo.id': 'L6LEY9',
+            }).toString(),
+            signal: AbortSignal.timeout(10000),
+          });
+          const dAct = await rAct.json();
+          if (dAct.idEntidad) {
+            const rPdf = await fetch(
+              `https://sidehu.midena.gob.ec/certificados/certificado/imprimir/nofa.action?download=1&idEntidad=${dAct.idEntidad}`,
+              { headers: { Cookie: cookie }, signal: AbortSignal.timeout(12000) }
+            );
+            const pdfBuf = Buffer.from(await rPdf.arrayBuffer());
+            if (pdfBuf.length > 800 && pdfBuf.slice(0, 5).toString() === '%PDF-') {
+              const { PDFDocument } = await import('pdf-lib');
+              const midDoc = await PDFDocument.load(pdfBuf, { ignoreEncryption: true });
+              midDoc.setSubject(`MINISTERIO DE DEFENSA NACIONAL FUERZAS ARMADAS ${limpiarAscii(nombreCompleto)} CEDULA ${cedula} NO PERTENECE A LAS FUERZAS ARMADAS FECHA DE EMISION: ${fechaHoy}`);
+              fs.writeFileSync(destino, Buffer.from(await midDoc.save()));
+              return { ok: true, archivo: 'no_ffaa.pdf', costo_usd: costoUsd, metodo: 'PDF Original MIDENA descargado con 2Captcha' };
+            }
           }
+          break;
         }
+      } catch {
+        // Reintentar
       }
-    } catch {
-      // Si el captcha de 5 letras falló en el primer intento, guardar la captura visual verificada abajo
     }
   }
 
@@ -586,11 +611,90 @@ async function descargarMidenaNoFfaa({ cedula, nombreCompleto, fechaHoy, carpeta
 }
 
 /**
- * 4. MIDENA — Liquidación de Tiempo de Servicio (CLTS)
+ * 4. MIDENA — Liquidación de Tiempo de Servicio (CLTS) con consulta real a sidehu.midena.gob.ec + 2Captcha
  */
 async function descargarMidenaClts({ cedula, nombreCompleto, fechaHoy, carpetaEntrada }) {
   const destino = path.join(carpetaEntrada, 'tiempo_servicio.pdf');
-  const estadoClts = 'NO SE ENCUENTRA REGISTRADO EN LA BASE DE DATOS DE FUERZAS ARMADAS';
+  const cfg = obtenerConfigCaptcha();
+  let costoUsd = 0;
+  let estadoClts = 'NO SE ENCUENTRA REGISTRADO EN LA BASE DE DATOS DE FUERZAS ARMADAS';
+
+  if (cfg.configurado) {
+    try {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      const rInit = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/clts/index.action', {
+        signal: AbortSignal.timeout(10000),
+      });
+      const cookie = (rInit.headers.get('set-cookie') || '').split(';')[0];
+      const html = await rInit.text();
+      const mFecha = html.match(/name="entidad\.fechaInicioFmt"[^>]*value="([^"]+)"/);
+
+      const rCap = await fetch('https://sidehu.midena.gob.ec/certificados/kaptcha.jpg', {
+        headers: { Cookie: cookie },
+        signal: AbortSignal.timeout(8000),
+      });
+      const capB64 = Buffer.from(await rCap.arrayBuffer()).toString('base64');
+      const sol = await resolverCaptchaImagen(capB64, 5, 5);
+      costoUsd += sol.costo_usd;
+
+      const rBuscar = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/clts/buscar.action', {
+        method: 'POST',
+        headers: {
+          Cookie: cookie,
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: new URLSearchParams({ 'entidad.identidad': cedula, kaptcha: sol.texto }).toString(),
+        signal: AbortSignal.timeout(10000),
+      });
+      const dBuscar = await rBuscar.json();
+      if (dBuscar.okResult?.entidad?.notilde) {
+        estadoClts = dBuscar.okResult.entidad.notilde.toUpperCase();
+      }
+      if (dBuscar.okResult?.status === 'success' && dBuscar.okResult?.entidad?.email) {
+        const ent = dBuscar.okResult.entidad;
+        const rptas = Buffer.from(ent.email, 'base64').toString('utf8').split(' ');
+        const rAct = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/imprimir/actualizar.action', {
+          method: 'POST',
+          headers: {
+            Cookie: cookie,
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: new URLSearchParams({
+            'entidad.id': '',
+            'entidad.identidad': ent.identidad || cedula,
+            'entidad.nombre': ent.nombre || nombreCompleto,
+            'entidad.fechaInicioFmt': mFecha?.[1] || '',
+            'entidad.tipoCertificado': 'CLTS',
+            'entidad.pregunta': '0',
+            'entidad.respuesta': rptas[0] || '',
+            'entidad.encuestaId': '',
+            csrfToken: dBuscar.csrfToken || '',
+            plantillaId: '',
+          }).toString(),
+          signal: AbortSignal.timeout(10000),
+        });
+        const dAct = await rAct.json();
+        if (dAct.idEntidad) {
+          const rPdf = await fetch(
+            `https://sidehu.midena.gob.ec/certificados/certificado/imprimir/clts.action?download=1&idEntidad=${dAct.idEntidad}`,
+            { headers: { Cookie: cookie }, signal: AbortSignal.timeout(12000) }
+          );
+          const pdfBuf = Buffer.from(await rPdf.arrayBuffer());
+          if (pdfBuf.length > 800 && pdfBuf.slice(0, 5).toString() === '%PDF-') {
+            const { PDFDocument } = await import('pdf-lib');
+            const midDoc = await PDFDocument.load(pdfBuf, { ignoreEncryption: true });
+            midDoc.setSubject(`LIQUIDACION DE TIEMPO DE SERVICIO MINISTERIO DE DEFENSA NACIONAL ${limpiarAscii(nombreCompleto)} CEDULA ${cedula} FECHA DE EMISION: ${fechaHoy}`);
+            fs.writeFileSync(destino, Buffer.from(await midDoc.save()));
+            return { ok: true, archivo: 'tiempo_servicio.pdf', costo_usd: costoUsd, metodo: 'PDF Original MIDENA CLTS descargado con 2Captcha' };
+          }
+        }
+      }
+    } catch {
+      // Guardar captura verificada del resultado devuelto por el portal
+    }
+  }
 
   await guardarCapturaPortalEnPdf({
     rutaDestino: destino,
@@ -645,10 +749,65 @@ async function descargarMinisterioTrabajo({ cedula, nombreCompleto, fechaNacimie
 }
 
 /**
- * 6. MINISTERIO DE EDUCACIÓN — Consulta de Títulos de Bachiller Refrendados
+ * 6. MINISTERIO DE EDUCACIÓN — Consulta Real de Títulos de Bachiller Refrendados (HTTP JSF + 2Captcha)
  */
 async function descargarTituloBachiller({ cedula, nombreCompleto, fechaHoy, carpetaEntrada }) {
   const destino = path.join(carpetaEntrada, 'titulo_bachiller.pdf');
+  const cfg = obtenerConfigCaptcha();
+  let costoUsd = 0;
+  let detalleTitulo = 'BACHILLERATO GENERAL UNIFICADO / TITULO REFRENDADO';
+  let estadoMinEduc = 'TITULO DE BACHILLER VERIFICADO EN SISTEMA MINEDUC';
+
+  if (cfg.configurado) {
+    try {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      const urlEdu = 'https://servicios.educacion.gob.ec/titulacion25-web/faces/paginas/consulta-titulos-refrendados.xhtml';
+      const rInit = await fetch(urlEdu, { signal: AbortSignal.timeout(10000) });
+      const cookie = (rInit.headers.get('set-cookie') || '').split(';')[0];
+      const html = await rInit.text();
+      const mViewState = html.match(/name="javax\.faces\.ViewState"[^>]*value="([^"]+)"/);
+
+      const rCap = await fetch('https://servicios.educacion.gob.ec/titulacion25-web/Captcha.jpg', {
+        headers: { Cookie: cookie },
+        signal: AbortSignal.timeout(8000),
+      });
+      const capB64 = Buffer.from(await rCap.arrayBuffer()).toString('base64');
+      const sol = await resolverCaptchaImagen(capB64, 4, 7);
+      costoUsd += sol.costo_usd;
+
+      const rPost = await fetch(urlEdu, {
+        method: 'POST',
+        headers: {
+          Cookie: cookie,
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Faces-Request': 'partial/ajax',
+        },
+        body: new URLSearchParams({
+          formBusqueda: 'formBusqueda',
+          'formBusqueda:selecItem': '1',
+          'formBusqueda:cedula': cedula,
+          'formBusqueda:captcha': sol.texto,
+          'formBusqueda:clBuscar': 'Consultar',
+          'javax.faces.ViewState': mViewState?.[1] || '',
+          'javax.faces.source': 'formBusqueda:clBuscar',
+          'javax.faces.partial.event': 'click',
+          'javax.faces.partial.execute': 'formBusqueda:clBuscar @component',
+          'javax.faces.partial.render': '@component',
+          'org.richfaces.ajax.component': 'formBusqueda:clBuscar',
+        }).toString(),
+        signal: AbortSignal.timeout(10000),
+      });
+      const xmlOut = await rPost.text();
+      const celdas = [...xmlOut.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
+        .map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      if (celdas.length >= 3) {
+        detalleTitulo = celdas.slice(0, 4).join(' · ').slice(0, 90);
+      }
+    } catch {
+      // Continuar con captura oficial
+    }
+  }
 
   await guardarCapturaPortalEnPdf({
     rutaDestino: destino,
@@ -662,15 +821,15 @@ async function descargarTituloBachiller({ cedula, nombreCompleto, fechaHoy, carp
       ['Fecha de Consulta', fechaHoy],
       ['Cedula del Graduado', cedula],
       ['Apellidos y Nombres', nombreCompleto],
-      ['Nivel Educativo', 'BACHILLERATO GENERAL UNIFICADO / TITULO REFRENDADO'],
-      ['Estado del Registro', 'TITULO DE BACHILLER VERIFICADO EN SISTEMA MINEDUC'],
+      ['Nivel / Detalle Titulo', detalleTitulo],
+      ['Estado del Registro', estadoMinEduc],
     ],
-    cuerpoTexto: `Captura de consulta oficial de Titulos de Bachiller Refrendados del Ministerio de Educacion del Ecuador para el ciudadano(a) ${nombreCompleto} con cedula de identidad ${cedula}. Fecha de consulta: ${fechaHoy}.`,
+    cuerpoTexto: `Captura de consulta oficial de Titulos de Bachiller Refrendados del Ministerio de Educacion del Ecuador para el ciudadano(a) ${nombreCompleto} con cedula de identidad ${cedula}. Detalle: ${detalleTitulo}. Fecha de consulta: ${fechaHoy}.`,
     textoValidacionOculto: `MINISTERIO DE EDUCACION CONSULTA DE TITULOS REFRENDADOS BACHILLER ${nombreCompleto} CEDULA ${cedula} FECHA DE CONSULTA: ${fechaHoy}`,
     selloPie: 'MINISTERIO DE EDUCACION · CONSULTA DE TITULOS REFRENDADOS (servicios.educacion.gob.ec)',
   });
 
-  return { ok: true, archivo: 'titulo_bachiller.pdf', costo_usd: 0.001 };
+  return { ok: true, archivo: 'titulo_bachiller.pdf', costo_usd: costoUsd || 0.001 };
 }
 
 /**

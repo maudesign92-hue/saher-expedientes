@@ -965,6 +965,8 @@
       const fnac = identidad?.fecha_nacimiento || exp.postulante.fecha_nacimiento || '—';
       const ecivil = identidad?.estado_civil || '—';
       const nombre = identidad?.nombre_completo || exp.postulante.nombre_completo || 'Postulante sin nombre registrado';
+      const apellidos = identidad?.apellidos || exp.postulante.apellidos || nombre.split(' ').slice(0, 2).join(' ');
+      const nombresSolo = identidad?.nombres || exp.postulante.nombres || nombre.split(' ').slice(2).join(' ');
 
       document.getElementById('res-nombre').textContent = nombre;
       document.getElementById('res-fuente').textContent = 'fuente: EcuadorAPI, no oficial';
@@ -1091,17 +1093,50 @@
               ` : ''}
 
               ${portal ? `
-                <div class="portal-helper">
-                  <a class="btn btn-sm btn-sec" href="${portal.url}" target="_blank" rel="noopener">🔗 Abrir portal oficial (${portal.entidad})</a>
-                  <span class="copy-pill">
-                    Cédula: <b>${cedula}</b>
-                    <button class="btn btn-sm btn-sec" onclick="copiarTexto('${cedula}', this)">Copiar</button>
-                  </span>
-                  <span class="copy-pill">
-                    Fecha nac.: <b>${fnac}</b>
-                    <button class="btn btn-sm btn-sec" onclick="copiarTexto('${fnac}', this)">Copiar</button>
-                  </span>
-                  <span style="color:var(--muted);font-size:0.79rem;">${portal.instruccion}</span>
+                <div class="portal-helper" style="flex-direction:column;align-items:stretch;gap:8px;background:#f8fafc;border:1.5px solid var(--saher-black);padding:12px;">
+                  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding-bottom:8px;">
+                    <strong style="color:var(--saher-black);font-size:0.84rem;">📋 DATOS LISTOS PARA COPIAR Y PEGAR EN ${portal.entidad.toUpperCase()}:</strong>
+                    <a class="btn btn-sm" href="${portal.url}" target="_blank" rel="noopener">🔗 Abrir Portal Oficial (${portal.entidad}) ↗</a>
+                  </div>
+                  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;">
+                    <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;">
+                      <span><b>Cédula / RUC / Pasaporte:</b> <code>${cedula}</code></span>
+                      <button class="btn btn-sm btn-black" onclick="copiarTexto('${cedula}', this)">📋 Copiar</button>
+                    </div>
+                    <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;">
+                      <span><b>Apellido(s) / Nombre(s):</b> <code>${nombre}</code></span>
+                      <button class="btn btn-sm btn-black" onclick="copiarTexto('${nombre}', this)">📋 Copiar</button>
+                    </div>
+                    <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;">
+                      <span><b>Solo Apellidos:</b> <code>${apellidos}</code></span>
+                      <button class="btn btn-sm btn-sec" onclick="copiarTexto('${apellidos}', this)">📋 Copiar</button>
+                    </div>
+                    <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;">
+                      <span><b>Solo Nombres:</b> <code>${nombresSolo}</code></span>
+                      <button class="btn btn-sm btn-sec" onclick="copiarTexto('${nombresSolo}', this)">📋 Copiar</button>
+                    </div>
+                    <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;">
+                      <span><b>Fecha Nacimiento (DD/MM/YYYY):</b> <code>${fnac}</code></span>
+                      <button class="btn btn-sm btn-black" onclick="copiarTexto('${fnac}', this)">📋 Copiar</button>
+                    </div>
+                    ${s.clave === 'antecedentes' ? `
+                      <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;">
+                        <span><b>Motivo Consulta:</b> <code>Proceso de reclutamiento de personal</code></span>
+                        <button class="btn btn-sm btn-black" onclick="copiarTexto('Proceso de reclutamiento de personal', this)">📋 Copiar</button>
+                      </div>
+                    ` : ''}
+                    ${s.clave === 'judiciales' ? `
+                      <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;background:#fffdf0;border-color:var(--saher-gold);">
+                        <span><b>Demandado/Procesado (Cédula):</b> <code>${cedula}</code></span>
+                        <button class="btn btn-sm btn-gold" onclick="copiarTexto('${cedula}', this)">📋 Copiar Demandado</button>
+                      </div>
+                      <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;background:#fffdf0;border-color:var(--saher-gold);">
+                        <span><b>Actor/Ofendido (Cédula):</b> <code>${cedula}</code></span>
+                        <button class="btn btn-sm btn-gold" onclick="copiarTexto('${cedula}', this)">📋 Copiar Actor</button>
+                      </div>
+                    ` : ''}
+                  </div>
+                  <div style="color:var(--muted);font-size:0.79rem;">💡 <b>Instrucción rápida:</b> ${portal.instruccion}</div>
                 </div>
               ` : ''}
             </td>
