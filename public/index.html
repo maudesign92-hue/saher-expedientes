@@ -475,13 +475,13 @@
         <div class="form-row">
           <div class="field">
             <label for="input-cedula">🔍 Número de Cédula del Postulante (10 dígitos)</label>
-            <input type="text" id="input-cedula" maxlength="10" placeholder="Ingresa la cédula (ej. 1804625752 o 1712345675)" onkeydown="if(event.key==='Enter') armarExpediente(false)" style="font-size:1.15rem;font-weight:800;" />
+            <input type="text" id="input-cedula" maxlength="10" placeholder="Ingresa la cédula (ej. 0503693988 o 1804625752)" onkeydown="if(event.key==='Enter') armarExpediente(true)" style="font-size:1.15rem;font-weight:800;" />
           </div>
-          <button class="btn" id="btn-armar" onclick="armarExpediente(false)">
-            🔍 Consultar Cédula y Compilar PDF Único
+          <button class="btn" id="btn-armar" onclick="armarExpediente(true, null, false)">
+            🔍 Consultar Cédula, Buscar Certificados y Compilar PDF
           </button>
-          <button class="btn btn-black" id="btn-armar-captcha" onclick="armarExpediente(true, null, false)" title="Conecta con los 6 portales oficiales usando navegador + 2Captcha para descargar los certificados reales">
-            🤖 Descargar todos los portales oficiales (2Captcha)
+          <button class="btn btn-black" id="btn-armar-captcha" onclick="armarExpediente(true, null, true)" title="Fuerza a los agentes a volver a consultar y capturar los 6 portales oficiales">
+            🤖 Re-ejecutar Agentes en los 6 Portales Oficiales
           </button>
         </div>
 
@@ -625,6 +625,7 @@
     let listaPostulantesCache = [];
     let expedienteActual = null;
     let archivosIndividualesCache = {};
+    let urlEnlaceBaseActual = '';
     let ultimoBlobUrl = null;
     const API_BASE = location.protocol === 'file:' ? 'http://localhost:3000' : '';
 
@@ -774,6 +775,7 @@
         }
         bitacoraEl.innerHTML = `<div>✅ Archivo <b>${file.name}</b> validado e integrado en el PDF único del expediente.</div>`;
         archivosIndividualesCache = data.archivosIndividuales || {};
+        if (data.urlEnlaceBase) urlEnlaceBaseActual = data.urlEnlaceBase;
         mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
       } catch (err) {
         mostrarError(err.message);
@@ -814,6 +816,7 @@
         }
         if (data.saldos) actualizarBarraSaldos(data.saldos.ecuadorApi, data.saldos.captcha);
         archivosIndividualesCache = data.archivosIndividuales || {};
+        if (data.urlEnlaceBase) urlEnlaceBaseActual = data.urlEnlaceBase;
         mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
       } catch (err) {
         mostrarError(err.message);
@@ -889,6 +892,7 @@
 
         if (data.saldos) actualizarBarraSaldos(data.saldos.ecuadorApi, data.saldos.captcha);
         archivosIndividualesCache = data.archivosIndividuales || {};
+        if (data.urlEnlaceBase) urlEnlaceBaseActual = data.urlEnlaceBase;
         mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
       } catch (err) {
         mostrarError(err.message);
@@ -989,16 +993,26 @@
               ${s.archivo ? `<div style="font-size:0.83rem;color:var(--muted);margin-top:4px;">Archivo actual: <code>${s.archivo}</code>${s.fecha_emision ? ` · Emisión: ${s.fecha_emision}` : ''}${s.vence ? ` · Vence: ${s.vence}` : ''}</div>` : ''}
               ${s.motivo ? `<div style="font-size:0.84rem;color:var(--pend-txt);margin-top:4px;font-weight:600;">${s.motivo}</div>` : ''}
 
-              <!-- RECUADRO PARA SUBIR MANUALMENTE (PDF, DOC, DOCX, JPG, PNG) EN CADA ÍTEM -->
+              <!-- RECUADRO PARA SUBIR MANUALMENTE (PDF, DOC, DOCX, JPG, PNG, ARCHIVO) EN CADA ÍTEM -->
               <div class="upload-slot-box ${descManual ? 'manual-req' : ''}">
                 <span style="font-size:0.82rem;font-weight:700;color:var(--saher-black);">
-                  📤 ${descManual || `¿No se pudo descargar por API/Agente? Sube aquí el archivo real de ${portal?.entidad || s.titulo} (PDF, DOC, Imagen):`}
+                  📤 ${descManual || `Subir archivo manual de ${portal?.entidad || s.titulo} (JPG, PDF, Word, PNG o archivo):`}
                 </span>
                 <label class="btn btn-sm" style="margin:0;">
-                  Seleccionar PDF / DOC / Imagen
-                  <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="subirArchivoIndividualSlot('${s.clave}', this)" />
+                  Seleccionar JPG / PDF / Word / PNG
+                  <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,*" style="display:none" onchange="subirArchivoIndividualSlot('${s.clave}', this)" />
                 </label>
               </div>
+
+              <!-- ENLACE ÚNICO INDIVIDUAL DE ESTE CASILLERO PARA ENVIAR A LA PERSONA -->
+              ${urlEnlaceBaseActual ? `
+                <div style="margin-top:8px;background:var(--saher-black);color:var(--saher-white);border:1px solid var(--saher-gold);border-radius:7px;padding:8px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                  <span style="font-size:0.78rem;color:var(--saher-gold);font-weight:700;">📲 Enlace único de este casillero (${s.titulo}):</span>
+                  <input type="text" readonly value="${urlEnlaceBaseActual}?item=${s.clave}" style="flex:1;min-width:210px;padding:5px 8px;font-size:0.78rem;background:#1e1e24;color:#fff;border:1px solid #444;border-radius:5px;" />
+                  <button class="btn btn-sm btn-gold" onclick="copiarTexto('${urlEnlaceBaseActual}?item=${s.clave}', this)">Copiar enlace</button>
+                  <a class="btn btn-sm" href="${urlEnlaceBaseActual}?item=${s.clave}" target="_blank">Abrir ↗</a>
+                </div>
+              ` : ''}
 
               ${portal ? `
                 <div class="portal-helper">
@@ -1092,7 +1106,7 @@
     function abrirPostulanteEnArmar(cedula) {
       cambiarTab('armar');
       document.getElementById('input-cedula').value = cedula;
-      armarExpediente(false);
+      armarExpediente(true);
     }
 
     // Inicializar al abrir
@@ -1103,8 +1117,8 @@
         if (d.ok) {
           document.getElementById('login-overlay').style.display = 'none';
           actualizarBarraSaldos(d.ecuadorApi, d.captcha);
-          document.getElementById('input-cedula').value = '1712345675';
-          await armarExpediente(false);
+          document.getElementById('input-cedula').value = '0503693988';
+          await armarExpediente(true);
         }
       } catch {
         document.getElementById('login-overlay').style.display = 'flex';

@@ -187,43 +187,69 @@
 
   <script>
     const token = location.pathname.split('/').filter(Boolean).pop();
+    const itemFiltro = new URLSearchParams(location.search).get('item');
+    let mostrarTodosForzado = false;
 
     const CERTIFICADOS = [
       {
         clave: 'antecedentes',
         titulo: '1. Antecedentes penales (Ministerio del Interior)',
         url: 'https://certificados.ministeriodelinterior.gob.ec/gestorcertificados/antecedentes/',
-        instruccion: 'Ingresa tu cédula, escribe el motivo "Proceso de reclutamiento de personal" y descarga el PDF.',
+        instruccion: 'Ingresa tu cédula, escribe el motivo "Proceso de reclutamiento de personal" y sube el archivo (PDF, Word o Imagen).',
       },
       {
         clave: 'judiciales',
         titulo: '2. Procesos judiciales (Función Judicial e-SATJE)',
         url: 'https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros',
-        instruccion: 'Escribe tu cédula en "Demandado / Procesado", pulsa BUSCAR e imprime el resultado como PDF.',
+        instruccion: 'Escribe tu cédula en "Demandado / Procesado", pulsa BUSCAR y sube el PDF o captura.',
       },
       {
         clave: 'no_ffaa',
         titulo: '3. No pertenecer a las FF. AA. (MIDENA)',
         url: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
-        instruccion: 'Ingresa tu cédula y el texto de seguridad de la imagen para descargar el certificado PDF.',
+        instruccion: 'Ingresa tu cédula y el texto de seguridad de la imagen para descargar y subir el certificado.',
       },
       {
         clave: 'clts',
         titulo: '4. Liquidación de tiempo de servicio (MIDENA)',
         url: 'https://sidehu.midena.gob.ec/certificados/clts.action',
-        instruccion: 'Ingresa tu cédula, el texto de seguridad y responde la pregunta personal para guardar el PDF.',
+        instruccion: 'Ingresa tu cédula, el texto de seguridad y sube el certificado o captura.',
       },
       {
         clave: 'servidor_publico',
         titulo: '5. Servidor público / Dependencia laboral (Min. Trabajo)',
         url: 'https://calculadoras.trabajo.gob.ec/dependencia',
-        instruccion: 'Ingresa tu cédula y tu fecha de nacimiento (DD/MM/AAAA), resuelve el captcha y descarga el PDF.',
+        instruccion: 'Ingresa tu cédula y tu fecha de nacimiento (DD/MM/AAAA) y sube el certificado.',
       },
       {
         clave: 'titulo_bachiller',
         titulo: '6. Título de bachiller (Ministerio de Educación)',
         url: 'https://servicios.educacion.gob.ec/titulacion25-web/faces/paginas/consulta-titulos-refrendados.xhtml',
-        instruccion: 'Ingresa tu cédula y el código de la imagen para descargar o imprimir tu consulta de título en PDF.',
+        instruccion: 'Sube tu certificado o consulta de Título de Bachiller (PDF, Word, JPG o PNG).',
+      },
+      {
+        clave: 'psicologico',
+        titulo: '7. Test de confianza (psicológico)',
+        url: null,
+        instruccion: 'Sube aquí el documento del Test de Confianza Psicológico (JPG, PDF, Word, PNG o archivo).',
+      },
+      {
+        clave: 'aptitud_fisica',
+        titulo: '8. Test de aptitud física',
+        url: null,
+        instruccion: 'Sube aquí el Certificado o Test de Aptitud Física (JPG, PDF, Word, PNG o archivo).',
+      },
+      {
+        clave: 'toxicologico',
+        titulo: '9. Examen toxicológico',
+        url: null,
+        instruccion: 'Sube aquí el Resultado del Examen Toxicológico (JPG, PDF, Word, PNG o archivo).',
+      },
+      {
+        clave: 'cedula',
+        titulo: '10. Cédula de identidad (Registro Civil)',
+        url: null,
+        instruccion: 'Sube aquí la Foto o Escaneo de la Cédula de Identidad (JPG, PNG, PDF o Word).',
       },
     ];
 
@@ -258,32 +284,41 @@
       const mapaSlots = {};
       for (const s of exp?.slots || []) mapaSlots[s.clave] = s;
 
+      const listaMostrar = (itemFiltro && !mostrarTodosForzado)
+        ? CERTIFICADOS.filter(c => c.clave === itemFiltro)
+        : CERTIFICADOS;
+
       const cont = document.getElementById('lista-certificados');
-      cont.innerHTML = CERTIFICADOS.map(c => {
+      cont.innerHTML = listaMostrar.map(c => {
         const s = mapaSlots[c.clave] || { estado: 'pendiente', motivo: '' };
         const esCompleto = s.estado === 'completo';
         const esObs = s.estado === 'observación';
         const tieneRechazo = s.motivo && (s.motivo.includes('no corresponde al postulante') || s.motivo.includes('Vencido'));
 
         return `
-          <div class="card">
+          <div class="card" style="${itemFiltro === c.clave ? 'border: 2px solid var(--saher-gold);' : ''}">
             <div class="cert-header">
               <div class="cert-title">${esCompleto ? '✅ ' : ''}${c.titulo}</div>
-              <span class="badge ${s.estado}">${esCompleto ? '✓ LISTO' : s.estado}</span>
+              <span class="badge ${s.estado}">${esCompleto ? '✓ CARGADO' : s.estado}</span>
             </div>
             <div class="instruccion">${c.instruccion}</div>
+            ${s.archivo ? `<div style="font-size:0.82rem;color:var(--ok-txt);font-weight:700;margin-bottom:8px;">Archivo cargado: ${s.archivo}</div>` : ''}
             ${esObs ? `<div class="motivo-alerta">⚠ Observación: ${s.motivo}. Puedes subir un archivo nuevo para reemplazarlo.</div>` : ''}
-            ${(!esCompleto && !esObs && tieneRechazo) ? `<div class="motivo-error">❌ ${s.motivo}. Por favor sube el certificado correcto.</div>` : ''}
+            ${(!esCompleto && !esObs && tieneRechazo) ? `<div class="motivo-error">❌ ${s.motivo}. Por favor sube el documento correcto.</div>` : ''}
             <div class="actions">
-              <a class="btn btn-sec" href="${c.url}" target="_blank" rel="noopener">1. Abrir portal oficial</a>
+              ${c.url ? `<a class="btn btn-sec" href="${c.url}" target="_blank" rel="noopener">🔗 Abrir portal oficial</a>` : ''}
               <label class="btn">
-                2. ${esCompleto ? 'Subir otro PDF' : 'Subir PDF'}
-                <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="subirCertificado('${c.clave}', this)" />
+                📤 ${esCompleto ? 'Reemplazar archivo (JPG, PDF, Word, PNG)' : 'Subir archivo (JPG, PDF, Word, PNG)'}
+                <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,*" style="display:none" onchange="subirCertificado('${c.clave}', this)" />
               </label>
             </div>
           </div>
         `;
-      }).join('');
+      }).join('') + (itemFiltro && !mostrarTodosForzado ? `
+        <div style="text-align:center;margin-top:12px;">
+          <button class="btn btn-sec" onclick="mostrarTodosForzado=true;cargarEstado();">Ver todos los casilleros del expediente</button>
+        </div>
+      ` : '');
     }
 
     async function subirCertificado(clave, inputEl) {

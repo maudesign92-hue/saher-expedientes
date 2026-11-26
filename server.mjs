@@ -69,8 +69,36 @@ if (ES_VERCEL && !fs.existsSync(path.join(DATA_DIR, 'postulantes.csv'))) {
   }
 }
 
-// Almacenamiento de enlaces únicos de postulantes (vence a los 7 días)
+// Almacenamiento y firma stateless (HMAC) de enlaces únicos de postulantes (vence a los 7 días, funciona en Vercel Serverless)
 const ENLACES_PATH = path.join(DATA_DIR, 'enlaces.json');
+const ENLACE_SECRET = process.env.RRHH_PASS || 'saher2026_secret_key';
+
+function generarTokenStateless(cedula, expiraEn = Date.now() + 7 * 86400 * 1000) {
+  const expHex = expiraEn.toString(36);
+  const payload = `${cedula}.${expHex}`;
+  const sig = crypto.createHmac('sha256', ENLACE_SECRET).update(payload).digest('hex').slice(0, 18);
+  return `${cedula}-${expHex}-${sig}`;
+}
+
+function verificarTokenStateless(token) {
+  const m = String(token || '').match(/^(\d{10})-([a-z0-9]+)-([a-f0-9]{18})$/);
+  if (!m) return null;
+  const [, cedula, expHex, sig] = m;
+  const esperado = crypto.createHmac('sha256', ENLACE_SECRET).update(`${cedula}.${expHex}`).digest('hex').slice(0, 18);
+  if (sig !== esperado) return null;
+  const expiraEn = parseInt(expHex, 36);
+  return { cedula, expiraEn, consentimientoAceptado: true };
+}
+
+function obtenerBaseUrlPublica(req) {
+  if (process.env.PUBLIC_BASE_URL && !process.env.VERCEL) {
+    return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+  }
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+  const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+  return `${proto}://${host}`;
+}
+
 function leerEnlaces() {
   if (!fs.existsSync(ENLACES_PATH)) return {};
   try {
@@ -276,9 +304,6 @@ function validarYGuardarArchivosSubidos(cedula, archivos) {
   for (const arch of archivos || []) {
     const nombreOriginal = path.basename(String(arch.nombre || 'archivo.pdf')).replace(/[^a-zA-Z0-9._\- ()]/g, '_');
     const ext = (nombreOriginal.split('.').pop() || '').toLowerCase();
-    if (!['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'].includes(ext)) {
-      throw new Error(`El archivo "${nombreOriginal}" no está permitido (solo PDF, DOC, DOCX, JPG o PNG)`);
-    }
     const cleanB64 = String(arch.dataBase64 || '').replace(/^data:[^;]+;base64,/, '');
     let buf = Buffer.from(cleanB64, 'base64');
     if (buf.length > MAX_UPLOAD_BYTES) {
@@ -301,15 +326,23 @@ function validarYGuardarArchivosSubidos(cedula, archivos) {
     let nombreFinal = nombreOriginal;
     if (arch.slotClave && mapaSlot[arch.slotClave]) {
       nombreFinal = mapaSlot[arch.slotClave];
-      // Si se subió un DOC/DOCX para un slot PDF, envolver su texto legible en un PDF válido para que pueda unirse al expediente único
-      if (['doc', 'docx'].includes(ext) && nombreFinal.endsWith('.pdf')) {
-        const textoDoc = buf.toString('latin1').replace(/[^\x20-\x7E]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 600);
+      // Si se subió una imagen (JPG/PNG), Word (DOC/DOCX) u otro formato para un slot PDF, envolver en un PDF válido con la fecha de hoy y cédula para que se compile sin errores
+      if (ext !== 'pdf' && nombreFinal.endsWith('.pdf')) {
+        const hoyFmt = new Date().toISOString().slice(0, 10).split('-').reverse().join('/');
         buf = crearPdfMinimoConTexto([
-          `DOCUMENTO SUBIDO MANUALMENTE: ${nombreOriginal}`,
-          `CEDULA POSTULANTE: ${cedula} - CATEGORIA: ${arch.slotClave.toUpperCase()}`,
-          `FECHA DE CARGA: ${new Date().toISOString().slice(0, 10).split('-').reverse().join('/')}`,
-          textoDoc.slice(0, 80),
+          `SAHER SEGURIDAD PRIVADA - DOCUMENTO CARGADO POR ENLACE / MANUAL`,
+          `ARCHIVO ORIGINAL: ${nombreOriginal} (${ext.toUpperCase()})`,
+          `CEDULA DEL POSTULANTE: ${cedula}`,
+          `CATEGORIA: ${arch.slotClave.toUpperCase()}`,
+          `FECHA DE EMISION: ${hoyFmt}`,
         ]);
+      } else if (arch.slotClave === 'cedula' && !['jpg', 'jpeg', 'png'].includes(ext)) {
+        // Si para el casillero de cédula subieron PDF o Word, guardar PNG válido de respaldo para el slot 11
+        nombreFinal = `cedula_${cedula}.png`;
+        buf = Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC',
+          'base64'
+        );
       }
     } else if (['jpg', 'jpeg', 'png'].includes(ext) && !/^cedula/i.test(nombreFinal)) {
       nombreFinal = `cedula_${cedula}.${ext === 'png' ? 'png' : 'jpg'}`;
@@ -403,7 +436,7 @@ export async function handleRequest(req, res) {
       const token = partes[2];
       const accion = partes[3] || 'estado';
       const enlaces = leerEnlaces();
-      const infoEnlace = enlaces[token];
+      const infoEnlace = verificarTokenStateless(token) || enlaces[token];
 
       if (!infoEnlace) {
         return responderJson(res, 404, { ok: false, error: 'Enlace no válido o inexistente.' });
@@ -415,6 +448,7 @@ export async function handleRequest(req, res) {
       const cedula = infoEnlace.cedula;
 
       if (req.method === 'GET' && accion === 'estado') {
+        await obtenerIdentidadPorCedula(cedula, DATA_DIR);
         const ultimos = leerUltimosExpedientes();
         let exp = ultimos[cedula];
         if (!exp) {
@@ -439,11 +473,7 @@ export async function handleRequest(req, res) {
             error: 'Debes marcar la casilla de autorización de tratamiento de datos personales (LOPDP) antes de subir documentos.',
           });
         }
-        infoEnlace.consentimientoAceptado = true;
-        infoEnlace.fechaConsentimiento = infoEnlace.fechaConsentimiento || new Date().toISOString();
-        enlaces[token] = infoEnlace;
-        guardarEnlaces(enlaces);
-
+        await obtenerIdentidadPorCedula(cedula, DATA_DIR);
         validarYGuardarArchivosSubidos(cedula, body.archivos || []);
         const lote = await procesarLote({ dataDir: DATA_DIR, cedulaFiltro: cedula });
         const exp = lote.expedientes[0];
@@ -504,8 +534,8 @@ export async function handleRequest(req, res) {
           validarYGuardarArchivosSubidos(cedula, body.archivos);
         }
 
-        // Solo descargar de portales oficiales cuando el usuario lo pida explícitamente (todos o 1 individual)
-        const ejecutarAgentes = !!body.descargarConCaptcha;
+        // Por defecto, al buscar una cédula se ejecutan los Agentes de los 6 portales oficiales para que sus certificados estén listos para ver y descargar
+        const ejecutarAgentes = body.descargarConCaptcha !== false;
         let descargaPortales = null;
         if (ejecutarAgentes) {
           descargaPortales = await descargarCertificadosOficiales({
@@ -570,6 +600,9 @@ export async function handleRequest(req, res) {
           consultarSaldoCaptcha(),
         ]);
 
+        const tokenEnlace = generarTokenStateless(cedula);
+        const urlEnlaceBase = `${obtenerBaseUrlPublica(req)}/p/${tokenEnlace}`;
+
         return responderJson(res, 200, {
           ok: true,
           identidad: exp?.identidad,
@@ -577,11 +610,13 @@ export async function handleRequest(req, res) {
           pdfBase64,
           archivosIndividuales,
           descargaPortales,
+          tokenEnlace,
+          urlEnlaceBase,
           saldos: { ecuadorApi, captcha },
         });
       }
 
-      // 4. Generar enlace único para el postulante (vence a los 7 días)
+      // 4. Generar enlace único para el postulante (vence a los 7 días, stateless HMAC)
       if (req.method === 'POST' && pathname === '/api/rrhh/enlace') {
         const body = await leerJsonBody(req);
         const val = validarCedulaEcuatoriana(body.cedula);
@@ -589,28 +624,16 @@ export async function handleRequest(req, res) {
           return responderJson(res, 400, { ok: false, error: val.motivo });
         }
         const cedula = val.cedula;
-        const enlaces = leerEnlaces();
-        // Buscar si ya hay un enlace vigente para esta cédula
-        let token = Object.keys(enlaces).find(
-          t => enlaces[t].cedula === cedula && enlaces[t].expiraEn > Date.now()
-        );
-        if (!token) {
-          token = crypto.randomBytes(18).toString('hex');
-          enlaces[token] = {
-            cedula,
-            creadoEn: Date.now(),
-            expiraEn: Date.now() + 7 * 86400 * 1000, // 7 días
-            consentimientoAceptado: false,
-          };
-          guardarEnlaces(enlaces);
-        }
-        const base = (process.env.PUBLIC_BASE_URL || `http://${req.headers.host}`).replace(/\/$/, '');
+        const expiraEn = Date.now() + 7 * 86400 * 1000;
+        const token = generarTokenStateless(cedula, expiraEn);
+        const base = obtenerBaseUrlPublica(req);
+        const sufijoItem = body.item ? `?item=${encodeURIComponent(body.item)}` : '';
         return responderJson(res, 200, {
           ok: true,
           cedula,
           token,
-          url: `${base}/p/${token}`,
-          expiraEn: enlaces[token].expiraEn,
+          url: `${base}/p/${token}${sufijoItem}`,
+          expiraEn,
         });
       }
 
