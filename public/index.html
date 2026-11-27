@@ -494,12 +494,46 @@
             <label for="input-cedula">🔍 Número de Cédula del Postulante (10 dígitos)</label>
             <input type="text" id="input-cedula" maxlength="10" placeholder="Ingresa la cédula (ej. 0503693988 o 1804625752)" onkeydown="if(event.key==='Enter') armarExpediente(true)" style="font-size:1.15rem;font-weight:800;" />
           </div>
-          <button class="btn" id="btn-armar" onclick="armarExpediente(true, null, false)">
+          <button class="btn" id="btn-armar" onclick="armarExpediente(true, obtenerFuentesSeleccionadas(), false)">
             🔍 Consultar Cédula, Buscar Certificados y Compilar PDF
           </button>
-          <button class="btn btn-black" id="btn-armar-captcha" onclick="armarExpediente(true, null, true)" title="Fuerza a los agentes a volver a consultar y capturar los 6 portales oficiales">
-            🤖 Re-ejecutar Agentes en los 6 Portales Oficiales
+          <button class="btn btn-black" id="btn-armar-captcha" onclick="armarExpediente(true, obtenerFuentesSeleccionadas(), true)" title="Fuerza a los agentes a volver a consultar y capturar las fuentes seleccionadas">
+            🤖 Iniciar Consulta RCI (<span id="fuentes-count">6</span> fuentes)
           </button>
+        </div>
+
+        <!-- SELECTOR DE FUENTES ESTILO MINDSUITE360 RCI -->
+        <div style="margin-top:14px;padding:12px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;">
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+            <strong style="font-size:0.84rem;color:var(--saher-black);text-transform:uppercase;">Fuentes para esta verificación RCI</strong>
+            <span id="fuentes-badge" class="badge completo">6 seleccionadas</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;font-size:0.82rem;">
+            <label style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:7px;cursor:pointer;text-transform:none;font-weight:700;">
+              <input type="checkbox" class="chk-fuente" value="no_ffaa" checked onchange="actualizarConteoFuentes()" />
+              <span>Situación militar · MIDENA (NOFA)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:7px;cursor:pointer;text-transform:none;font-weight:700;">
+              <input type="checkbox" class="chk-fuente" value="servidor_publico" checked onchange="actualizarConteoFuentes()" />
+              <span>Sector público · Min. Trabajo</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:7px;cursor:pointer;text-transform:none;font-weight:700;">
+              <input type="checkbox" class="chk-fuente" value="clts" checked onchange="actualizarConteoFuentes()" />
+              <span>Tiempo servicio · MIDENA CLTS</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:7px;cursor:pointer;text-transform:none;font-weight:700;">
+              <input type="checkbox" class="chk-fuente" value="titulo_bachiller" checked onchange="actualizarConteoFuentes()" />
+              <span>Título bachiller · MinEduc</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:7px;cursor:pointer;text-transform:none;font-weight:700;">
+              <input type="checkbox" class="chk-fuente" value="judiciales" checked onchange="actualizarConteoFuentes()" />
+              <span>Procesos judiciales · e-SATJE</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:7px;cursor:pointer;text-transform:none;font-weight:700;">
+              <input type="checkbox" class="chk-fuente" value="antecedentes" checked onchange="actualizarConteoFuentes()" />
+              <span>Antecedentes · Min. Interior</span>
+            </label>
+          </div>
         </div>
 
         <div id="bitacora-agentes" style="display:none;margin-top:14px;background:var(--saher-black);color:var(--saher-gold-light);border-left:4px solid var(--saher-red);padding:12px 16px;border-radius:8px;font-family:monospace;font-size:0.84rem;line-height:1.6;"></div>
@@ -1008,6 +1042,18 @@
       }
     }
 
+    function obtenerFuentesSeleccionadas() {
+      return Array.from(document.querySelectorAll('.chk-fuente:checked')).map(el => el.value);
+    }
+
+    function actualizarConteoFuentes() {
+      const n = obtenerFuentesSeleccionadas().length;
+      const c1 = document.getElementById('fuentes-count');
+      const b1 = document.getElementById('fuentes-badge');
+      if (c1) c1.textContent = n;
+      if (b1) b1.textContent = `${n} seleccionadas`;
+    }
+
     function copiarTexto(txt, btnEl) {
       navigator.clipboard.writeText(txt);
       const orig = btnEl.textContent;
@@ -1203,6 +1249,7 @@
                   <span style="font-size:0.78rem;color:var(--saher-gold);font-weight:700;">📲 Enlace único de este casillero (${s.titulo}):</span>
                   <input type="text" readonly value="${urlEnlaceBaseActual}?item=${s.clave}" style="flex:1;min-width:210px;padding:5px 8px;font-size:0.78rem;background:#1e1e24;color:#fff;border:1px solid #444;border-radius:5px;" />
                   <button class="btn btn-sm btn-gold" onclick="copiarTexto('${urlEnlaceBaseActual}?item=${s.clave}', this)">Copiar enlace</button>
+                  <a class="btn btn-sm" style="background:#16a34a;" href="https://wa.me/?text=${encodeURIComponent('Hola, por favor sube tu documento de ' + s.titulo + ' para SAHER aquí: ' + urlEnlaceBaseActual + '?item=' + s.clave)}" target="_blank" rel="noopener">💬 WhatsApp</a>
                   <a class="btn btn-sm" href="${urlEnlaceBaseActual}?item=${s.clave}" target="_blank">Abrir ↗</a>
                 </div>
               ` : ''}
@@ -1281,6 +1328,7 @@
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
             <input type="text" readonly value="${data.url}" style="flex:1;min-width:260px;" />
             <button class="btn btn-sm btn-gold" onclick="copiarTexto('${data.url}', this)">Copiar enlace</button>
+            <a class="btn btn-sm" style="background:#16a34a;" href="https://wa.me/?text=${encodeURIComponent('Hola, ingresa a este enlace único de SAHER para completar tu Evaluación de Confianza y subir tus certificados: ' + data.url)}" target="_blank" rel="noopener">💬 Enviar por WhatsApp</a>
             <a class="btn btn-sm" href="${data.url}" target="_blank">Abrir pantalla del postulante ↗</a>
           </div>
         `;
