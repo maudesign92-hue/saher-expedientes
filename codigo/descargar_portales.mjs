@@ -213,6 +213,28 @@ function normalizarFechaIso(f) {
   return '';
 }
 
+function encontrarChromeLocal() {
+  const candidatos = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  ];
+  return candidatos.find(p => fs.existsSync(p)) || null;
+}
+
+async function abrirNavegadorLocal() {
+  const exe = encontrarChromeLocal();
+  if (!exe) return null;
+  try {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch({ executablePath: exe, headless: true });
+    return browser;
+  } catch {
+    return null;
+  }
+}
+
 async function guardarSiVerificado({ buffer, destino, cedula, nombreCompleto, slotClave }) {
   const verif = await verificarDocumento({
     buffer,
@@ -557,10 +579,71 @@ async function descargarMinisterioTrabajo({ cedula, nombreCompleto, fechaNacimie
 }
 
 /**
- * 4. FUNCIÓN JUDICIAL (e-SATJE 2020) — Consulta en vivo API oficial (contarCausas Demandado y Actor)
- * Nota: e-SATJE no emite PDF descargable; el respaldo oficial es imprimir la consulta en el portal.
+ * 5. MINISTERIO DE EDUCACIÓN — Consulta Oficial de Títulos de Bachiller (Playwright Chrome + 2Captcha)
  */
-async function consultarProcesosJudicialesEnVivo({ cedula }) {
+async function descargarTituloBachiller({ cedula, nombreCompleto, carpetaEntrada }) {
+  const destino = path.join(carpetaEntrada, 'titulo_bachiller.pdf');
+  const cfg = obtenerConfigCaptcha();
+  if (!cfg.configurado) {
+    return { ok: false, requiere_manual: true, motivo: 'TWOCAPTCHA_API_KEY no configurada.' };
+  }
+
+  const browser = await abrirNavegadorLocal();
+  if (!browser) {
+    return {
+      ok: false,
+      requiere_manual: true,
+      motivo: 'Este portal requiere Chrome local (ejecuta el servidor en http://localhost:3000) o sube el PDF manualmente con Copiar & Pegar.',
+    };
+  }
+
+  let costoUsd = 0;
+  try {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    const urlPortal = 'https://servicios.educacion.gob.ec/titulacion25-web/faces/paginas/consulta-titulos-refrendados.xhtml';
+    await page.goto(urlPortal, { waitUntil: 'domcontentloaded', timeout: 25000 });
+    await page.click('#formBusqueda\\:selecItem\\:0');
+    await page.waitForSelector('#formBusqueda\\:cedula', { timeout: 10000 });
+    await page.fill('#formBusqueda\\:cedula', cedula);
+
+    const src = await page.locator('#formBusqueda\\:capimg').getAttribute('src');
+    const fullCapUrl = new URL(src, urlPortal).toString();
+    const imgBuf = await (await context.request.get(fullCapUrl)).body();
+    const sol = await resolverCaptchaImagen(imgBuf.toString('base64'), 4, 6);
+    costoUsd += sol.costo_usd;
+
+    await page.fill('#formBusqueda\\:captcha', sol.texto.trim());
+    await page.click('#formBusqueda\\:clBuscar');
+    await page.waitForTimeout(3500);
+
+    const pdfBuf = Buffer.from(await page.pdf({ format: 'A4', printBackground: true }));
+    const verif = await guardarSiVerificado({
+      buffer: pdfBuf,
+      destino,
+      cedula,
+      nombreCompleto,
+      slotClave: 'titulo_bachiller',
+    });
+
+    return {
+      ok: true,
+      archivo: 'titulo_bachiller.pdf',
+      costo_usd: costoUsd,
+      verificacion: verif,
+      metodo: 'Captura oficial en vivo (Chrome + 2Captcha Ministerio de Educación)',
+    };
+  } catch (err) {
+    return { ok: false, costo_usd: costoUsd, requiere_manual: true, motivo: `Ministerio de Educación: ${err.message}` };
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+/**
+ * 6. FUNCIÓN JUDICIAL (e-SATJE 2020) — Consulta en vivo API oficial + Captura Chrome si disponible
+ */
+async function consultarProcesosJudicialesEnVivo({ cedula, nombreCompleto, carpetaEntrada }) {
   let causasDemandado = null;
   let causasActor = null;
 
@@ -597,6 +680,43 @@ async function consultarProcesosJudicialesEnVivo({ cedula }) {
     if (rAct.ok) causasActor = Number(await rAct.text());
   } catch {
     // continuar
+  }
+
+  // Intentar captura real de la página oficial e-SATJE con Chrome local
+  const browser = await abrirNavegadorLocal();
+  if (browser) {
+    try {
+      const context = await browser.newContext({ ignoreHTTPSErrors: true });
+      const page = await context.newPage();
+      await page.goto('https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros', {
+        waitUntil: 'networkidle',
+        timeout: 25000,
+      });
+      await page.locator('input[formcontrolname="cedulaDemandado"]').fill(cedula);
+      await page.waitForTimeout(800);
+      await page.locator('button:has-text("BUSCAR")').click();
+      await page.waitForTimeout(3500);
+      const pdfBuf = Buffer.from(await page.pdf({ format: 'A4', printBackground: true }));
+      const destino = path.join(carpetaEntrada, 'judiciales.pdf');
+      const verif = await guardarSiVerificado({
+        buffer: pdfBuf,
+        destino,
+        cedula,
+        nombreCompleto,
+        slotClave: 'judiciales',
+      });
+      await browser.close().catch(() => {});
+      return {
+        ok: true,
+        archivo: 'judiciales.pdf',
+        causas_demandado: Number.isFinite(causasDemandado) ? causasDemandado : null,
+        causas_actor: Number.isFinite(causasActor) ? causasActor : null,
+        verificacion: verif,
+        metodo: `Captura oficial e-SATJE (Demandado: ${causasDemandado ?? '?'} · Actor: ${causasActor ?? '?'})`,
+      };
+    } catch {
+      await browser.close().catch(() => {});
+    }
   }
 
   return {
@@ -702,9 +822,13 @@ export async function descargarCertificadosOficiales({
 
   if (debeEjecutar('judiciales', 'judiciales.pdf')) {
     tareas.push(
-      consultarProcesosJudicialesEnVivo({ cedula }).then(r => {
+      consultarProcesosJudicialesEnVivo({ cedula, nombreCompleto: nombre, carpetaEntrada }).then(r => {
         resultados.judiciales = r;
-        bitacora.push(`ℹ️ [Función Judicial e-SATJE] ${r.motivo}`);
+        bitacora.push(
+          r.ok
+            ? `✅ [Función Judicial e-SATJE] ${r.metodo} verificado (judiciales.pdf)`
+            : `ℹ️ [Función Judicial e-SATJE] ${r.motivo}`
+        );
       })
     );
   }
@@ -719,12 +843,22 @@ export async function descargarCertificadosOficiales({
   }
 
   if (debeEjecutar('titulo_bachiller', 'titulo_bachiller.pdf')) {
-    resultados.titulo_bachiller = {
-      ok: false,
-      requiere_manual: true,
-      motivo: 'Portal del Ministerio de Educación requiere consulta e impresión oficial. Usa el panel Copiar & Pegar y sube el PDF original aquí.',
-    };
-    bitacora.push(`ℹ️ [Ministerio de Educación] ${resultados.titulo_bachiller.motivo}`);
+    tareas.push(
+      descargarTituloBachiller({ cedula, nombreCompleto: nombre, carpetaEntrada })
+        .then(r => {
+          resultados.titulo_bachiller = r;
+          gastoTotalUsd += r.costo_usd || 0;
+          bitacora.push(
+            r.ok
+              ? `✅ [Ministerio de Educación] ${r.metodo} verificado (titulo_bachiller.pdf)`
+              : `ℹ️ [Ministerio de Educación] ${r.motivo}`
+          );
+        })
+        .catch(e => {
+          resultados.titulo_bachiller = { ok: false, requiere_manual: true, motivo: e.message };
+          bitacora.push(`❌ [Ministerio de Educación] ${e.message}`);
+        })
+    );
   }
 
   await Promise.all(tareas);

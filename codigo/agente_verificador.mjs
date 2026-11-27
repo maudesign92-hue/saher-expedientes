@@ -168,7 +168,10 @@ export async function verificarDocumento({
   const minimoTokens = tokensEsperados.length >= 3 ? 2 : tokensEsperados.length;
   const coincidenciaNombre = tokensEsperados.length === 0 ? true : tokensEncontrados >= minimoTokens;
 
-  if (tokensEsperados.length >= 2 && tokensEncontrados === 0) {
+  const esPortalImpreso = (slotClave === 'titulo_bachiller' || slotClave === 'judiciales') &&
+    FIRMAS_OFICIALES[slotClave]?.test(textoNorm);
+
+  if (tokensEsperados.length >= 2 && tokensEncontrados === 0 && !esPortalImpreso) {
     return {
       valido: false,
       nivel: 'ALERTA_IDENTIDAD',
