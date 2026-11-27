@@ -1220,6 +1220,53 @@
       setTimeout(() => { btnEl.textContent = orig; }, 1400);
     }
 
+    function generarResumenAmarilloSlot(s, exp, identidad) {
+      const guardado = exp.resumenes_portales?.[s.clave];
+      if (guardado?.texto) {
+        return {
+          titulo: `📋 RESUMEN EXTRAÍDO EN VIVO (${guardado.fecha || 'Hoy'}):`,
+          texto: guardado.texto,
+        };
+      }
+      const ced = exp.postulante?.cedula || '';
+      const nom = identidad?.nombre_completo || exp.postulante?.nombre_completo || '';
+      const ev = exp.evaluacion_confianza;
+      const mapaDefault = {
+        cedula: `Registro Civil / EcuadorAPI: C.I. ${ced} (${nom}) · ${identidad?.edad_anos != null ? identidad.edad_anos + ' años' : 'Edad pendiente'} · ${identidad?.mayor_de_edad ? '✅ Ecuatoriano y mayor de edad — CALIFICA en 1ra instancia.' : '⚠️ Verificar mayoría de edad.'}`,
+        titulo_bachiller: s.archivo
+          ? `✅ Título de bachiller verificado en expediente (${s.archivo}).`
+          : '⏳ Pendiente consulta en MinEduc con 2Captcha o carga manual del título.',
+        aptitud_fisica: s.archivo
+          ? `✅ Certificado de Aptitud Física cargado (${s.archivo}) — CALIFICA.`
+          : '⏳ Pendiente carga manual del Certificado de Aptitud Física (Centro de Salud Pública / Jhon Torres).',
+        psicologico: ev
+          ? `✅ Evaluación de Confianza (${ev.puntaje_global.toFixed(2)}/5 · ${ev.conclusion}) — CALIFICA.`
+          : (s.archivo ? `✅ Certificado de Prueba de Confianza cargado (${s.archivo}).` : '⏳ Pendiente Evaluación de Confianza (40 ítems) o carga de certificado.'),
+        toxicologico: s.archivo
+          ? `✅ Resultado de Examen Toxicológico cargado (${s.archivo}) — CALIFICA.`
+          : '⏳ Pendiente carga manual del Examen Toxicológico.',
+        no_ffaa: s.archivo
+          ? `✅ Certificado MIDENA NOFA verificado (${s.archivo}) — CALIFICA (No pertenece a FF.AA.).`
+          : '⏳ Haz clic en 🤖 Descargar 1 a 1 del portal para consultar MIDENA con 2Captcha.',
+        servidor_publico: s.archivo
+          ? `✅ Certificado Ministerio del Trabajo verificado (${s.archivo}) — CALIFICA (Sin dependencia pública).`
+          : '⏳ Haz clic en 🤖 Descargar 1 a 1 del portal para consultar Ministerio del Trabajo con 2Captcha.',
+        clts: s.archivo
+          ? `✅ Certificado MIDENA Exmiembros verificado (${s.archivo}) — CALIFICA.`
+          : '⏳ Haz clic en 🤖 Descargar 1 a 1 del portal para consultar MIDENA CLTS con 2Captcha.',
+        judiciales: s.archivo
+          ? `✅ Consulta Función Judicial SATJE verificada (${s.archivo}) — CALIFICA.`
+          : '⏳ Haz clic en 🤖 Descargar 1 a 1 del portal para consultar Función Judicial e-SATJE en vivo.',
+        incapacidad: s.archivo
+          ? `✅ Respaldo de no incapacidad (Código Civil) cargado (${s.archivo}) — CALIFICA.`
+          : '⏳ PENDIENTE — No tener incapacidad absoluta o relativa (Código Civil).',
+      };
+      return {
+        titulo: '📋 RESUMEN / ESTADO DE VERIFICACIÓN:',
+        texto: mapaDefault[s.clave] || (s.archivo ? `✅ Documento cargado (${s.archivo}).` : '⏳ Pendiente de verificación.'),
+      };
+    }
+
     function mostrarResultadoExpediente(exp, identidad, pdfBase64 = null) {
       expedienteActual = exp;
       const card = document.getElementById('resultado-card');
@@ -1423,14 +1470,17 @@
               ${s.archivo ? `<div style="font-size:0.83rem;color:var(--muted);margin-top:4px;">Archivo actual: <code>${s.archivo}</code>${s.fecha_emision ? ` · Emisión: ${s.fecha_emision}` : ''}${s.vence ? ` · Vence: ${s.vence}` : ''}</div>` : ''}
               ${s.verificacion ? `<div style="font-size:0.8rem;margin-top:4px;font-weight:700;color:${s.verificacion.valido ? 'var(--ok-txt)' : 'var(--pend-txt)'};">🛡️ Agente Verificador: ${s.verificacion.motivo}</div>` : ''}
               ${s.motivo ? `<div style="font-size:0.84rem;color:var(--pend-txt);margin-top:4px;font-weight:600;">${s.motivo}</div>` : ''}
-              ${exp.resumenes_portales?.[s.clave]?.texto ? `
-                <div style="margin-top:8px;padding:10px 12px;background:#fef08a;border:2px solid #ca8a04;border-radius:7px;color:#422006;font-size:0.84rem;line-height:1.45;">
-                  <div style="font-weight:900;text-transform:uppercase;font-size:0.75rem;letter-spacing:0.04em;margin-bottom:3px;">
-                    📋 RESUMEN EXTRAÍDO EN VIVO CON 2CAPTCHA (${exp.resumenes_portales[s.clave].fecha || 'Hoy'}):
+              ${(() => {
+                const resAm = generarResumenAmarilloSlot(s, exp, identidad);
+                return `
+                  <div style="margin-top:8px;padding:10px 12px;background:#fef08a;border:2px solid #ca8a04;border-radius:7px;color:#422006;font-size:0.84rem;line-height:1.45;">
+                    <div style="font-weight:900;text-transform:uppercase;font-size:0.75rem;letter-spacing:0.04em;margin-bottom:3px;">
+                      ${resAm.titulo}
+                    </div>
+                    <div style="font-weight:700;">${resAm.texto}</div>
                   </div>
-                  <div style="font-weight:700;">${exp.resumenes_portales[s.clave].texto}</div>
-                </div>
-              ` : ''}
+                `;
+              })()}
               <div id="robot-msg-${s.clave}" style="display:none;margin-top:6px;padding:7px 10px;border-radius:6px;border:1px solid;font-size:0.81rem;"></div>
 
               <!-- RECUADRO PARA SUBIR MANUALMENTE (PDF, DOC, DOCX, JPG, PNG, ARCHIVO) EN CADA ÍTEM -->

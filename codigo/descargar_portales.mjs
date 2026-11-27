@@ -319,11 +319,14 @@ async function descargarMidenaNofa({ cedula, nombreCompleto, carpetaEntrada }) {
     });
     const dBuscar = await rBuscar.json();
     if (dBuscar.okResult?.status === 'danger') {
+      const msgDanger = dBuscar.okResult.mensaje || 'Consulta rechazada por el portal.';
       return {
         ok: false,
         costo_usd: costoUsd,
         requiere_manual: true,
-        motivo: `MIDENA NOFA: ${dBuscar.okResult.mensaje || 'Consulta rechazada por el portal.'}`,
+        califica: null,
+        resumen_texto: `MIDENA NOFA (2Captcha OK): ${msgDanger} (Subir PDF original manualmente si ya lo descargaste).`,
+        motivo: `MIDENA NOFA: ${msgDanger}`,
       };
     }
     if (dBuscar.okResult?.status === 'success') {
@@ -379,7 +382,13 @@ async function descargarMidenaNofa({ cedula, nombreCompleto, carpetaEntrada }) {
       }
     }
   }
-  return { ok: false, costo_usd: costoUsd, requiere_manual: true, motivo: 'MIDENA NOFA no devolvió el certificado tras 2 intentos de captcha.' };
+  return {
+    ok: false,
+    costo_usd: costoUsd,
+    requiere_manual: true,
+    resumen_texto: 'MIDENA NOFA: El portal no devolvió el certificado tras 2 intentos de captcha. Reintenta con el botón 🤖 o abre el portal oficial.',
+    motivo: 'MIDENA NOFA no devolvió el certificado tras 2 intentos de captcha.',
+  };
 }
 
 /**
