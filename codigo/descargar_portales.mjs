@@ -261,16 +261,23 @@ async function descargarMidenaNofa({ cedula, nombreCompleto, carpetaEntrada }) {
   }
 
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
   let costoUsd = 0;
 
   for (let intentoCaptcha = 1; intentoCaptcha <= 2; intentoCaptcha++) {
     const jar = {};
     const r0 = await fetch('https://sidehu.midena.gob.ec/certificados/nofa.action', {
+      headers: { 'User-Agent': ua },
       signal: AbortSignal.timeout(10000),
     });
     extraerCookies(r0, jar);
     const rInit = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/nofa/index.action', {
-      headers: { Cookie: extraerCookies(r0, jar), 'X-Requested-With': 'XMLHttpRequest' },
+      headers: {
+        Cookie: extraerCookies(r0, jar),
+        'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': ua,
+        Referer: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
+      },
       signal: AbortSignal.timeout(10000),
     });
     const cookie = extraerCookies(rInit, jar);
@@ -278,11 +285,24 @@ async function descargarMidenaNofa({ cedula, nombreCompleto, carpetaEntrada }) {
     const mFecha = html.match(/name="entidad\.fechaInicioFmt"[^>]*value="([^"]+)"/);
 
     const rCap = await fetch('https://sidehu.midena.gob.ec/certificados/kaptcha.jpg', {
-      headers: { Cookie: cookie },
+      headers: {
+        Cookie: cookie,
+        'User-Agent': ua,
+        Referer: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
+      },
       signal: AbortSignal.timeout(8000),
     });
-    const capB64 = Buffer.from(await rCap.arrayBuffer()).toString('base64');
-    const sol = await resolverCaptchaImagen(capB64, 5, 5);
+    const capBuf = Buffer.from(await rCap.arrayBuffer());
+    const cType = rCap.headers.get('content-type') || '';
+    if (!cType.includes('image') || capBuf.length < 500) {
+      return {
+        ok: false,
+        costo_usd: costoUsd,
+        requiere_manual: true,
+        motivo: `MIDENA no devolvió la imagen del captcha desde esta IP (HTTP ${rCap.status}). Ábrelo desde tu navegador o en http://localhost:3000.`,
+      };
+    }
+    const sol = await resolverCaptchaImagen(capBuf.toString('base64'), 5, 5);
     costoUsd += sol.costo_usd;
 
     const rBuscar = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/nofa/buscar.action', {
@@ -291,11 +311,21 @@ async function descargarMidenaNofa({ cedula, nombreCompleto, carpetaEntrada }) {
         Cookie: cookie,
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': ua,
+        Referer: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
       },
       body: new URLSearchParams({ 'entidad.identidad': cedula, kaptcha: sol.texto.trim() }).toString(),
       signal: AbortSignal.timeout(10000),
     });
     const dBuscar = await rBuscar.json();
+    if (dBuscar.okResult?.status === 'danger') {
+      return {
+        ok: false,
+        costo_usd: costoUsd,
+        requiere_manual: true,
+        motivo: `MIDENA NOFA: ${dBuscar.okResult.mensaje || 'Consulta rechazada por el portal.'}`,
+      };
+    }
     if (dBuscar.okResult?.status === 'success') {
       const ent = dBuscar.okResult.entidad || {};
       const rAct = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/imprimir/actualizar.action', {
@@ -304,6 +334,7 @@ async function descargarMidenaNofa({ cedula, nombreCompleto, carpetaEntrada }) {
           Cookie: cookie,
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           'X-Requested-With': 'XMLHttpRequest',
+          'User-Agent': ua,
         },
         body: new URLSearchParams({
           'entidad.id': '',
@@ -358,16 +389,23 @@ async function descargarMidenaClts({ cedula, nombreCompleto, carpetaEntrada }) {
   }
 
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
   let costoUsd = 0;
 
   try {
     const jar = {};
     const r0 = await fetch('https://sidehu.midena.gob.ec/certificados/clts.action', {
+      headers: { 'User-Agent': ua },
       signal: AbortSignal.timeout(10000),
     });
     extraerCookies(r0, jar);
     const rInit = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/clts/index.action', {
-      headers: { Cookie: extraerCookies(r0, jar), 'X-Requested-With': 'XMLHttpRequest' },
+      headers: {
+        Cookie: extraerCookies(r0, jar),
+        'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': ua,
+        Referer: 'https://sidehu.midena.gob.ec/certificados/clts.action',
+      },
       signal: AbortSignal.timeout(10000),
     });
     const cookie = extraerCookies(rInit, jar);
@@ -375,11 +413,24 @@ async function descargarMidenaClts({ cedula, nombreCompleto, carpetaEntrada }) {
     const mFecha = html.match(/name="entidad\.fechaInicioFmt"[^>]*value="([^"]+)"/);
 
     const rCap = await fetch('https://sidehu.midena.gob.ec/certificados/kaptcha.jpg', {
-      headers: { Cookie: cookie },
+      headers: {
+        Cookie: cookie,
+        'User-Agent': ua,
+        Referer: 'https://sidehu.midena.gob.ec/certificados/clts.action',
+      },
       signal: AbortSignal.timeout(8000),
     });
-    const capB64 = Buffer.from(await rCap.arrayBuffer()).toString('base64');
-    const sol = await resolverCaptchaImagen(capB64, 5, 5);
+    const capBuf = Buffer.from(await rCap.arrayBuffer());
+    const cType = rCap.headers.get('content-type') || '';
+    if (!cType.includes('image') || capBuf.length < 500) {
+      return {
+        ok: false,
+        costo_usd: costoUsd,
+        requiere_manual: true,
+        motivo: `MIDENA CLTS no devolvió la imagen del captcha desde esta IP (HTTP ${rCap.status}).`,
+      };
+    }
+    const sol = await resolverCaptchaImagen(capBuf.toString('base64'), 5, 5);
     costoUsd += sol.costo_usd;
 
     const rBuscar = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/clts/buscar.action', {
@@ -388,12 +439,22 @@ async function descargarMidenaClts({ cedula, nombreCompleto, carpetaEntrada }) {
         Cookie: cookie,
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': ua,
+        Referer: 'https://sidehu.midena.gob.ec/certificados/clts.action',
       },
       body: new URLSearchParams({ 'entidad.identidad': cedula, kaptcha: sol.texto.trim() }).toString(),
       signal: AbortSignal.timeout(10000),
     });
     const dBuscar = await rBuscar.json();
-    if (dBuscar.okResult?.status === 'success') {
+    if (dBuscar.okResult?.status === 'danger') {
+      return {
+        ok: false,
+        costo_usd: costoUsd,
+        requiere_manual: true,
+        motivo: `MIDENA CLTS: ${dBuscar.okResult.mensaje || 'Consulta rechazada por el portal.'}`,
+      };
+    }
+    if (dBuscar.okResult?.entidad || dBuscar.okResult?.status === 'success') {
       const ent = dBuscar.okResult.entidad || {};
       const rAct = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/imprimir/actualizar.action', {
         method: 'POST',
@@ -439,6 +500,46 @@ async function descargarMidenaClts({ cedula, nombreCompleto, carpetaEntrada }) {
           };
         }
       }
+      // Si MIDENA CLTS no emite PDF descargable (ej. ciudadano no registra datos como militar), capturar la pantalla oficial con Chrome local
+      const browser = await abrirNavegadorLocal();
+      if (browser) {
+        try {
+          const context = await browser.newContext({ ignoreHTTPSErrors: true });
+          const page = await context.newPage();
+          await page.goto('https://sidehu.midena.gob.ec/certificados/clts.action', {
+            waitUntil: 'domcontentloaded',
+            timeout: 20000,
+          });
+          await page.waitForSelector('input[name="entidad.identidad"]', { timeout: 10000 });
+          await page.fill('input[name="entidad.identidad"]', cedula);
+          const capEl = await page.waitForSelector('img[src*="kaptcha"]', { timeout: 8000 });
+          const capShot = await capEl.screenshot();
+          const sol2 = await resolverCaptchaImagen(capShot.toString('base64'), 5, 5);
+          costoUsd += sol2.costo_usd;
+          await page.fill('input[name="kaptcha"]', sol2.texto.trim());
+          await page.click('button[type="submit"], input[type="submit"], #btnBuscar');
+          await page.waitForTimeout(3000);
+          const pdfBuf = Buffer.from(await page.pdf({ format: 'A4', printBackground: true }));
+          const verif = await guardarSiVerificado({
+            buffer: pdfBuf,
+            destino,
+            cedula,
+            nombreCompleto,
+            slotClave: 'clts',
+          });
+          await browser.close().catch(() => {});
+          return {
+            ok: true,
+            archivo: 'tiempo_servicio.pdf',
+            costo_usd: costoUsd,
+            verificacion: verif,
+            metodo: 'Captura oficial en vivo (Chrome + 2Captcha MIDENA CLTS)',
+          };
+        } catch {
+          await browser.close().catch(() => {});
+        }
+      }
+
       return {
         ok: false,
         costo_usd: costoUsd,
