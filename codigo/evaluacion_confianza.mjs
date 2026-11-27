@@ -149,20 +149,27 @@ export function calificarEvaluacionConfianza({
   const fortaleza = ordenadas[0][0];
   const menorFaceta = ordenadas[ordenadas.length - 1][0];
 
-  const nivelGlobal = !calidadConsistente
-    ? 'NO CONCLUYENTE (La informacion no permite decidir; revisar o repetir)'
-    : puntajeGlobal >= 3.6
-      ? 'FAVORABLE (El resultado respalda el perfil de confianza evaluado)'
-      : 'NO FAVORABLE (El resultado muestra alertas relevantes para el perfil evaluado)';
+  // Muestra normativa original IPIP-HEXACO (Ashton, Lee & Goldberg, N=411, alpha=0.88)
+  const NORMA = { global: 3.85, de: 0.45, sinceridad: 3.96, justicia: 4.32, codicia: 3.57, modestia: 3.55 };
+  const zScore = Number(((puntajeGlobal - NORMA.global) / NORMA.de).toFixed(2));
 
-  const conclusion = !calidadConsistente
-    ? 'NO CONCLUYENTE'
-    : puntajeGlobal >= 3.6
-      ? 'FAVORABLE'
-      : 'NO FAVORABLE';
+  let conclusion = 'FAVORABLE';
+  let nivelGlobal = `FAVORABLE (z = ${zScore}, consistente con muestra normativa)`;
+  if (!calidadConsistente) {
+    conclusion = 'NO CONCLUYENTE';
+    nivelGlobal = 'NO CONCLUYENTE (Alertas de calidad impiden interpretacion; revisar o repetir)';
+  } else if (zScore <= -1.0) {
+    conclusion = 'NO FAVORABLE';
+    nivelGlobal = `NO FAVORABLE (z = ${zScore} <= -1.00; alertas relevantes para el perfil)`;
+  } else if (zScore < -0.5) {
+    conclusion = 'FAVORABLE CON OBSERVACIONES';
+    nivelGlobal = `FAVORABLE CON OBSERVACIONES (z = ${zScore} entre -1.00 y -0.50)`;
+  }
 
   return {
     conclusion,
+    z_score: zScore,
+    norma: NORMA,
     vigencia_dias: 90,
     puntaje_global: puntajeGlobal,
     nivel_global: nivelGlobal,
@@ -239,35 +246,38 @@ export async function generarPdfInformeConfianza({ cedula, nombreCompleto, evalu
   });
 
   // Resumen ejecutivo y Conclusión (FAVORABLE / NO FAVORABLE / NO CONCLUYENTE)
-  const conclColor = evaluacion.conclusion === 'FAVORABLE' ? verde : (evaluacion.conclusion === 'NO FAVORABLE' ? rojo : dorado);
+  const conclColor = evaluacion.conclusion?.startsWith('FAVORABLE') ? verde : (evaluacion.conclusion === 'NO FAVORABLE' ? rojo : dorado);
   page.drawRectangle({ x: 40, y: 556, width: 515, height: 32, color: fondoClaro, borderColor: conclColor, borderWidth: 1.5 });
-  page.drawText(`CONCLUSION: ${evaluacion.conclusion || 'FAVORABLE'}  (Vigencia: 90 dias · Art. 50.4 / 51.4 LOVSP)`, {
-    x: 52, y: 568, size: 11, font: fontBold, color: conclColor,
+  page.drawText(`CONCLUSION: ${evaluacion.conclusion || 'FAVORABLE'}  (z=${evaluacion.z_score ?? '0.00'} · Vigencia: 90 dias · Art. 50.4 / 51.4 LOVSP)`, {
+    x: 52, y: 568, size: 10.5, font: fontBold, color: conclColor,
   });
 
-  page.drawText('RESUMEN EJECUTIVO Y LECTURA POR FACETAS', { x: 40, y: 536, size: 10, font: fontBold, color: negro });
+  page.drawText('PERFIL CONTINUO IPIP-HEXACO VS. MUESTRA NORMATIVA (N=411, alpha=0.88)', { x: 40, y: 536, size: 9.5, font: fontBold, color: negro });
   page.drawLine({ start: { x: 40, y: 531 }, end: { x: 555, y: 531 }, thickness: 1.5, color: rojo });
   page.drawText(
-    limpiarAscii(`Fortaleza relativa: ${evaluacion.fortaleza}. Area prioritaria de contraste en entrevista: ${evaluacion.aspecto_contraste}.`),
+    limpiarAscii(`Fortaleza: ${evaluacion.fortaleza}. Aspecto a contrastar: ${evaluacion.aspecto_contraste}.`),
     { x: 40, y: 514, size: 9.5, font, color: negro }
   );
 
-  // Barras de las 4 facetas + global
+  // Barras de las 4 facetas + global con promedio normativo
+  const norm = evaluacion.norma || { global: 3.85, sinceridad: 3.96, justicia: 4.32, codicia: 3.57, modestia: 3.55 };
   const filas = [
-    ['Perfil Global (H-H)', evaluacion.puntaje_global],
-    ['1. Sinceridad', evaluacion.facetas.sinceridad],
-    ['2. Justicia y normas', evaluacion.facetas.justicia],
-    ['3. Evitacion de la codicia', evaluacion.facetas.codicia],
-    ['4. Modestia', evaluacion.facetas.modestia],
+    ['Perfil Global (H-H)', evaluacion.puntaje_global, norm.global],
+    ['1. Sinceridad (SINC)', evaluacion.facetas.sinceridad, norm.sinceridad],
+    ['2. Justicia y normas (FAIR)', evaluacion.facetas.justicia, norm.justicia],
+    ['3. Evitacion codicia (GREE)', evaluacion.facetas.codicia, norm.codicia],
+    ['4. Modestia (MODE)', evaluacion.facetas.modestia, norm.modestia],
   ];
   let y = 482;
-  for (const [nombreF, val] of filas) {
-    page.drawText(nombreF, { x: 40, y, size: 9.5, font: fontBold, color: negro });
-    // Barra fondo
-    page.drawRectangle({ x: 210, y: y - 2, width: 280, height: 12, color: rgb(0.9, 0.92, 0.94) });
-    const ancho = Math.max(8, Math.min(280, (val / 5) * 280));
-    page.drawRectangle({ x: 210, y: y - 2, width: ancho, height: 12, color: val >= 3.5 ? verde : (val >= 2.8 ? dorado : rojo) });
-    page.drawText(`${val.toFixed(2)} / 5`, { x: 502, y, size: 9.5, font: fontBold, color: negro });
+  for (const [nombreF, val, ref] of filas) {
+    page.drawText(nombreF, { x: 40, y, size: 9.2, font: fontBold, color: negro });
+    page.drawRectangle({ x: 205, y: y - 2, width: 255, height: 12, color: rgb(0.9, 0.92, 0.94) });
+    const ancho = Math.max(8, Math.min(255, (val / 5) * 255));
+    page.drawRectangle({ x: 205, y: y - 2, width: ancho, height: 12, color: val >= ref ? verde : (val >= 2.8 ? dorado : rojo) });
+    // Marcador de norma
+    const xRef = 205 + (ref / 5) * 255;
+    page.drawLine({ start: { x: xRef, y: y - 4 }, end: { x: xRef, y: y + 12 }, thickness: 1.5, color: negro });
+    page.drawText(`${val.toFixed(2)} (Ref: ${ref.toFixed(2)})`, { x: 468, y, size: 8.5, font: fontBold, color: negro });
     y -= 28;
   }
 
