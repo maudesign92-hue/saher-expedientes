@@ -609,10 +609,7 @@
             <div><small style="color:var(--muted);display:block;font-weight:700;">ASESOR A CARGO</small><strong id="res-asesor">—</strong></div>
             <div><small style="color:var(--muted);display:block;font-weight:700;">PROGRESO REQUISITOS (NIVEL 1)</small><strong id="res-progreso-10" style="color:var(--saher-red);">0 / 9</strong></div>
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;">
-            <button class="btn btn-sm btn-black" onclick="guardarProcesoAsesor('en_proceso')">💾 Guardar Proceso (Reanudar luego)</button>
-            <button class="btn btn-sm" style="background:#16a34a;" onclick="guardarProcesoAsesor('completado')">✅ 100% COMPLETADO</button>
-          </div>
+          <span style="font-size:0.82rem;color:var(--muted);font-weight:700;">⬇ Al terminar los 9 requisitos, guarda o finaliza abajo</span>
         </div>
 
         <div class="totales-row">
@@ -671,6 +668,16 @@
           </thead>
           <tbody id="res-tabla-docs"></tbody>
         </table>
+
+        <!-- BOTONES GRANDES CENTRADOS AL FINAL DE LOS 9 REQUISITOS -->
+        <div style="margin:26px auto;padding:22px;background:var(--saher-black);border:2px solid var(--saher-gold);border-radius:12px;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:18px;box-shadow:0 8px 24px rgba(0,0,0,0.22);">
+          <button class="btn" onclick="guardarProcesoAsesor('en_proceso')" style="background:#1e1e26;color:var(--saher-gold);border:2px solid var(--saher-gold);padding:16px 32px;font-size:1.08rem;font-weight:900;min-width:290px;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+            💾 GUARDAR PROCESO (Reanudar luego)
+          </button>
+          <button class="btn" onclick="guardarProcesoAsesor('completado')" style="background:#16a34a;color:#fff;border:2px solid #86efac;padding:16px 36px;font-size:1.12rem;font-weight:900;min-width:290px;justify-content:center;box-shadow:0 4px 14px rgba(22,163,74,0.45);">
+            ✅ 100% COMPLETADO
+          </button>
+        </div>
 
         <!-- MÓDULO COMERCIAL: CLASIFICACIÓN, VENTA, VIGENCIA 2 AÑOS Y FICHA DEL ESTUDIANTE -->
         <div style="margin:22px 0;padding:16px;border-radius:10px;border:2px solid var(--saher-black);background:#f8fafc;">
