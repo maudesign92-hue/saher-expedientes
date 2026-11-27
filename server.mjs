@@ -395,6 +395,40 @@ function responderJson(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
+async function convertirImagenesAPdfA4(imagenes = [], titulo = '') {
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595.28, 841.89]); // A4
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  if (titulo) {
+    page.drawText(titulo, { x: 42, y: 808, size: 10, font: fontBold, color: rgb(0.15, 0.15, 0.18) });
+    page.drawLine({ start: { x: 42, y: 800 }, end: { x: 553, y: 800 }, thickness: 1, color: rgb(0.8, 0.8, 0.85) });
+  }
+
+  const maxSlots = Math.min(2, imagenes.length);
+  for (let i = 0; i < maxSlots; i++) {
+    const item = imagenes[i];
+    if (!item?.buffer) continue;
+    const isPng = item.buffer.slice(0, 8).toString('hex').startsWith('89504e47');
+    const img = isPng ? await doc.embedPng(item.buffer) : await doc.embedJpg(item.buffer);
+    const boxW = 480;
+    const boxH = maxSlots === 1 ? 660 : 330;
+    const scale = Math.min(boxW / img.width, boxH / img.height, 1.5);
+    const drawW = img.width * scale;
+    const drawH = img.height * scale;
+    const x = (595.28 - drawW) / 2;
+    const yBase = maxSlots === 1 ? 420 : (i === 0 ? 595 : 225);
+    const y = yBase - drawH / 2;
+
+    if (item.etiqueta) {
+      page.drawText(item.etiqueta, { x: 42, y: y + drawH + 8, size: 8.5, font: fontBold, color: rgb(0.45, 0.48, 0.52) });
+    }
+    page.drawImage(img, { x, y, width: drawW, height: drawH });
+  }
+  return Buffer.from(await doc.save());
+}
+
 async function validarYGuardarArchivosSubidos(cedula, archivos, nombreEsperado = '') {
   const dirCedula = path.join(DATA_DIR, 'entrada', cedula);
   fs.mkdirSync(dirCedula, { recursive: true });
@@ -404,7 +438,7 @@ async function validarYGuardarArchivosSubidos(cedula, archivos, nombreEsperado =
     const nombreOriginal = path.basename(String(arch.nombre || 'archivo.pdf')).replace(/[^a-zA-Z0-9._\- ()]/g, '_');
     const ext = (nombreOriginal.split('.').pop() || '').toLowerCase();
     const cleanB64 = String(arch.dataBase64 || '').replace(/^data:[^;]+;base64,/, '');
-    const buf = Buffer.from(cleanB64, 'base64');
+    let buf = Buffer.from(cleanB64, 'base64');
     if (buf.length > MAX_UPLOAD_BYTES) {
       throw new Error(`El archivo "${nombreOriginal}" supera el máximo de 10 MB`);
     }
@@ -433,16 +467,21 @@ async function validarYGuardarArchivosSubidos(cedula, archivos, nombreEsperado =
       psicologico: 'psicologo',
       aptitud_fisica: 'aptitud_fisica',
       toxicologico: 'toxicologico',
-      incapacidad: 'incapacidad_civil',
       cedula: `cedula_${cedula}`,
     };
 
     let nombreFinal = nombreOriginal;
     if (arch.slotClave && mapaBase[arch.slotClave]) {
-      // Conservar la extensión original (pdf, jpg, png, doc, docx) para que el .ZIP y las descargas individuales entreguen el archivo auténtico sin alterar
-      nombreFinal = `${mapaBase[arch.slotClave]}.${ext || 'pdf'}`;
+      // Si el usuario subió una imagen (JPG/PNG) para cualquier requisito, convertirla automáticamente a PDF A4 limpio
+      if (['jpg', 'jpeg', 'png'].includes(ext)) {
+        buf = await convertirImagenesAPdfA4([{ buffer: buf }], `${arch.slotClave.toUpperCase()} - C.I. ${cedula}`);
+        nombreFinal = `${mapaBase[arch.slotClave]}.pdf`;
+      } else {
+        nombreFinal = `${mapaBase[arch.slotClave]}.${ext || 'pdf'}`;
+      }
     } else if (['jpg', 'jpeg', 'png'].includes(ext) && !/^cedula/i.test(nombreFinal)) {
-      nombreFinal = `cedula_${cedula}.${ext === 'png' ? 'png' : 'jpg'}`;
+      buf = await convertirImagenesAPdfA4([{ buffer: buf }], `CEDULA DE IDENTIDAD - ${cedula}`);
+      nombreFinal = `cedula_${cedula}.pdf`;
     }
 
     fs.writeFileSync(path.join(dirCedula, nombreFinal), buf);
@@ -704,6 +743,81 @@ export async function handleRequest(req, res) {
           guardarUltimoExpediente(cedula, ultimos[cedula]);
         }
         return responderJson(res, 200, { ok: true, postulante: actualizado, comercial });
+      }
+
+      // 0.D Unificar 2 caras de la cédula (Anverso + Reverso) mejoradas en un solo PDF A4
+      if (req.method === 'POST' && pathname === '/api/rrhh/unificar-cedula') {
+        const body = await leerJsonBody(req);
+        const val = validarCedulaEcuatoriana(body.cedula);
+        if (!val.valida) return responderJson(res, 400, { ok: false, error: val.motivo });
+        const cedula = val.cedula;
+        const dirCedula = path.join(DATA_DIR, 'entrada', cedula);
+        fs.mkdirSync(dirCedula, { recursive: true });
+
+        const dirLados = path.join(dirCedula, '_lados');
+        fs.mkdirSync(dirLados, { recursive: true });
+
+        if (body.lado1Base64) {
+          const b1 = Buffer.from(String(body.lado1Base64).replace(/^data:[^;]+;base64,/, ''), 'base64');
+          fs.writeFileSync(path.join(dirLados, 'lado1.jpg'), b1);
+        }
+        if (body.lado2Base64) {
+          const b2 = Buffer.from(String(body.lado2Base64).replace(/^data:[^;]+;base64,/, ''), 'base64');
+          fs.writeFileSync(path.join(dirLados, 'lado2.jpg'), b2);
+        }
+
+        const imgs = [];
+        if (fs.existsSync(path.join(dirLados, 'lado1.jpg'))) {
+          imgs.push({ buffer: fs.readFileSync(path.join(dirLados, 'lado1.jpg')), etiqueta: 'ANVERSO (LADO 1)' });
+        }
+        if (fs.existsSync(path.join(dirLados, 'lado2.jpg'))) {
+          imgs.push({ buffer: fs.readFileSync(path.join(dirLados, 'lado2.jpg')), etiqueta: 'REVERSO (LADO 2)' });
+        }
+        if (!imgs.length) {
+          return responderJson(res, 400, { ok: false, error: 'Sube al menos una imagen de la cédula.' });
+        }
+
+        const pdfCedula = await convertirImagenesAPdfA4(imgs, `CEDULA DE IDENTIDAD - C.I. ${cedula}`);
+        fs.writeFileSync(path.join(dirCedula, `cedula_${cedula}.pdf`), pdfCedula);
+        // Eliminar jpg/png antiguos de cedula si existían para que use el PDF unificado
+        for (const extOld of ['jpg', 'jpeg', 'png']) {
+          const oldP = path.join(dirCedula, `cedula_${cedula}.${extOld}`);
+          if (fs.existsSync(oldP)) fs.rmSync(oldP, { force: true });
+        }
+
+        const idResCed = await obtenerIdentidadPorCedula(cedula, DATA_DIR);
+        const lote = await procesarLote({ dataDir: DATA_DIR, cedulaFiltro: cedula });
+        const exp = lote.expedientes[0];
+        if (exp) {
+          exp.identidad = {
+            ...(exp.identidad || {}),
+            ...idResCed.postulante,
+            nombre_completo: idResCed.postulante?.nombre_completo || exp.postulante?.nombre_completo || '',
+          };
+          exp.progreso_10 = calcularResumenProgreso(exp, dirCedula);
+          guardarUltimoExpediente(cedula, exp);
+        }
+        const archivosIndividuales = {};
+        for (const s of exp?.slots || []) {
+          if (s.archivo) {
+            const fp = path.join(dirCedula, s.archivo);
+            if (fs.existsSync(fp)) archivosIndividuales[s.archivo] = fs.readFileSync(fp).toString('base64');
+          }
+        }
+        let pdfBase64 = null;
+        if (exp?.archivo_pdf && fs.existsSync(path.join(DATA_DIR, 'salida', exp.archivo_pdf))) {
+          pdfBase64 = fs.readFileSync(path.join(DATA_DIR, 'salida', exp.archivo_pdf)).toString('base64');
+        }
+        return responderJson(res, 200, {
+          ok: true,
+          archivo: `cedula_${cedula}.pdf`,
+          lado1Listo: fs.existsSync(path.join(dirLados, 'lado1.jpg')),
+          lado2Listo: fs.existsSync(path.join(dirLados, 'lado2.jpg')),
+          expediente: exp,
+          identidad: exp?.identidad,
+          archivosIndividuales,
+          pdfBase64,
+        });
       }
 
       // 1. Consultar saldos (EcuadorAPI + 2Captcha/CapSolver)

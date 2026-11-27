@@ -1073,6 +1073,86 @@
     }
 
     // Subir archivo manualmente en el recuadro de un ítem específico y recompilar el PDF único
+    // Motor de mejora tipo Escáner HD (Upscale + Dehaze / Auto-Contraste) sin alterar datos
+    async function mejorarFotoComoEscaner(file) {
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      if (ext === 'pdf' || ext === 'doc' || ext === 'docx') return await archivoABase64(file);
+      try {
+        const bmp = await createImageBitmap(file);
+        const targetW = Math.max(bmp.width, 1200);
+        const scale = Math.min(2.2, targetW / bmp.width);
+        const w = Math.round(bmp.width * scale);
+        const h = Math.round(bmp.height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(bmp, 0, 0, w, h);
+
+        // Quitar neblina / iluminación opaca (Auto-Niveles suaves 1.5%-98.5%)
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const d = imgData.data;
+        const hist = new Uint32Array(256);
+        for (let i = 0; i < d.length; i += 16) {
+          const lum = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8;
+          hist[lum]++;
+        }
+        const total = d.length / 16;
+        let acc = 0, lo = 0, hi = 255;
+        for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= total * 0.015) { lo = i; break; } }
+        acc = 0;
+        for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= total * 0.015) { hi = i; break; } }
+        const range = Math.max(30, hi - lo);
+        const factor = 255 / range;
+        for (let i = 0; i < d.length; i += 4) {
+          d[i] = Math.min(255, Math.max(0, (d[i] - lo) * factor));
+          d[i + 1] = Math.min(255, Math.max(0, (d[i + 1] - lo) * factor));
+          d[i + 2] = Math.min(255, Math.max(0, (d[i + 2] - lo) * factor));
+        }
+        ctx.putImageData(imgData, 0, 0);
+        return canvas.toDataURL('image/jpeg', 0.92);
+      } catch {
+        return await archivoABase64(file);
+      }
+    }
+
+    async function subirLadoCedula(lado, inputEl) {
+      const file = inputEl.files?.[0];
+      if (!file) return;
+      const cedula = document.getElementById('input-cedula').value.trim();
+      const errCed = validarCedulaFrontend(cedula);
+      if (errCed) { mostrarError(errCed); return; }
+
+      const bitacoraEl = document.getElementById('bitacora-agentes');
+      bitacoraEl.style.display = 'block';
+      bitacoraEl.innerHTML = `<div>✨ Aplicando mejora tipo Escáner HD y unificando Cédula (Lado ${lado}) en PDF...</div>`;
+      try {
+        const b64 = await mejorarFotoComoEscaner(file);
+        const payload = { cedula };
+        if (lado === 1) payload.lado1Base64 = b64;
+        else payload.lado2Base64 = b64;
+        const resp = await apiFetch('/api/rrhh/unificar-cedula', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          mostrarError(data.error || 'Error al unificar cédula');
+          return;
+        }
+        bitacoraEl.innerHTML = `<div>✅ <b>Lado ${lado} mejorado (Escáner HD)</b> y guardado en <code>${data.archivo}</code>.</div>`;
+        archivosIndividualesCache = data.archivosIndividuales || {};
+        mostrarResultadoExpediente(data.expediente, data.identidad, data.pdfBase64);
+      } catch (err) {
+        mostrarError(err.message);
+      } finally {
+        inputEl.value = '';
+      }
+    }
+
     async function subirArchivoIndividualSlot(slotClave, inputEl) {
       const file = inputEl.files?.[0];
       if (!file) return;
@@ -1617,27 +1697,34 @@
               })()}
               <div id="robot-msg-${s.clave}" style="display:none;margin-top:6px;padding:7px 10px;border-radius:6px;border:1px solid;font-size:0.81rem;"></div>
 
-              <!-- RECUADRO PARA SUBIR MANUALMENTE (PDF, DOC, DOCX, JPG, PNG, ARCHIVO) EN CADA ÍTEM -->
-              <div class="upload-slot-box ${descManual ? 'manual-req' : ''}">
-                <span style="font-size:0.82rem;font-weight:700;color:var(--saher-black);">
-                  📤 ${descManual || `Subir archivo manual de ${portal?.entidad || s.titulo} (JPG, PDF, Word, PNG o archivo):`}
-                </span>
-                <label class="btn btn-sm" style="margin:0;">
-                  Seleccionar JPG / PDF / Word / PNG
-                  <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,*" style="display:none" onchange="subirArchivoIndividualSlot('${s.clave}', this)" />
-                </label>
-              </div>
-
-              <!-- ENLACE ÚNICO INDIVIDUAL DE ESTE CASILLERO PARA ENVIAR A LA PERSONA -->
-              ${urlEnlaceBaseActual ? `
-                <div style="margin-top:8px;background:var(--saher-black);color:var(--saher-white);border:1px solid var(--saher-gold);border-radius:7px;padding:8px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-                  <span style="font-size:0.78rem;color:var(--saher-gold);font-weight:700;">📲 Enlace único de este casillero (${s.titulo}):</span>
-                  <input type="text" readonly value="${urlEnlaceBaseActual}?item=${s.clave}" style="flex:1;min-width:210px;padding:5px 8px;font-size:0.78rem;background:#1e1e24;color:#fff;border:1px solid #444;border-radius:5px;" />
-                  <button class="btn btn-sm btn-gold" onclick="copiarTexto('${urlEnlaceBaseActual}?item=${s.clave}', this)">Copiar enlace</button>
-                  <a class="btn btn-sm" style="background:#16a34a;" href="https://wa.me/?text=${encodeURIComponent('Hola, por favor sube tu documento de ' + s.titulo + ' para SAHER aquí: ' + urlEnlaceBaseActual + '?item=' + s.clave)}" target="_blank" rel="noopener">💬 WhatsApp</a>
-                  <a class="btn btn-sm" href="${urlEnlaceBaseActual}?item=${s.clave}" target="_blank">Abrir ↗</a>
+              ${s.clave === 'cedula' ? `
+                <!-- REQUISITO 1: 2 RECUADROS PARA LADO 1 Y LADO 2 DE LA CÉDULA CON MEJORA ESCÁNER HD -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:6px;">
+                  <label style="border:2px dashed #e11d48;background:#fff;border-radius:16px;padding:18px 14px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
+                    <span style="font-size:1.5rem;">🪪</span>
+                    <strong style="font-size:0.9rem;color:var(--saher-black);">Subir foto 1 lado (Anverso)</strong>
+                    <span style="font-size:0.78rem;color:var(--muted);">HEIC, JPG, PNG · ✨ Mejora Escáner HD</span>
+                    <input type="file" accept=".heic,.heif,.jpg,.jpeg,.png,.pdf,image/*" style="display:none" onchange="subirLadoCedula(1, this)" />
+                  </label>
+                  <label style="border:2px dashed #e11d48;background:#fff;border-radius:16px;padding:18px 14px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
+                    <span style="font-size:1.5rem;">🪪</span>
+                    <strong style="font-size:0.9rem;color:var(--saher-black);">Subir foto 2do lado (Reverso)</strong>
+                    <span style="font-size:0.78rem;color:var(--muted);">HEIC, JPG, PNG · ✨ Mejora Escáner HD</span>
+                    <input type="file" accept=".heic,.heif,.jpg,.jpeg,.png,.pdf,image/*" style="display:none" onchange="subirLadoCedula(2, this)" />
+                  </label>
                 </div>
-              ` : ''}
+              ` : `
+                <!-- RECUADRO PARA SUBIR MANUALMENTE (PDF, DOC, DOCX, JPG, PNG, ARCHIVO) EN CADA ÍTEM -->
+                <div class="upload-slot-box ${descManual ? 'manual-req' : ''}">
+                  <span style="font-size:0.82rem;font-weight:700;color:var(--saher-black);">
+                    📤 ${descManual || `Subir archivo manual de ${portal?.entidad || s.titulo} (JPG, PDF, Word, PNG o archivo):`}
+                  </span>
+                  <label class="btn btn-sm" style="margin:0;">
+                    Seleccionar JPG / PDF / Word / PNG
+                    <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic,*" style="display:none" onchange="subirArchivoIndividualSlot('${s.clave}', this)" />
+                  </label>
+                </div>
+              `}
 
               ${portal ? `
                 <div class="portal-helper" style="flex-direction:column;align-items:stretch;gap:8px;background:#f8fafc;border:1.5px solid var(--saher-black);padding:12px;">
@@ -1689,7 +1776,19 @@
                   <div style="color:var(--muted);font-size:0.79rem;">💡 <b>Instrucción rápida:</b> ${portal.instruccion}</div>
                 </div>
               ` : ''}
-            </td>
+
+              <!-- BARRA NEGRA DE DESCARGA EN PDF (SE DESBLOQUEA CUANDO EL DOCUMENTO YA ESTÁ CARGADO) -->
+              <div style="margin-top:6px;">
+                ${tieneArchivo ? `
+                  <button onclick="descargarArchivoIndividualExistente('${cedula}', '${s.archivo}')" style="width:100%;background:#0b0b0d;color:#fff;border:2px solid var(--saher-gold);border-radius:999px;padding:13px 22px;font-size:0.95rem;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 12px rgba(0,0,0,0.18);">
+                    ⬇ DESCARGA DE DOCUMENTO EN PDF
+                  </button>
+                ` : `
+                  <button disabled style="width:100%;background:#0b0b0d;color:#9ca3af;border:1px solid #333;border-radius:999px;padding:13px 22px;font-size:0.9rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;opacity:0.42;cursor:not-allowed;display:flex;align-items:center;justify-content:center;gap:10px;">
+                    🔒 DESCARGA DE DOCUMENTO EN PDF (Pendiente subir o descargar)
+                  </button>
+                `}
+              </div>
           </div>
         `;
       }).join('') + `
