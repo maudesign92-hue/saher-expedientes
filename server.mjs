@@ -286,6 +286,21 @@ function verificarAuthRrhh(req) {
 }
 
 function calcularResumenProgreso(exp, dirEntradaCedula = null) {
+  if (!exp || !Array.isArray(exp.slots)) {
+    return {
+      completos: 0,
+      total: 10,
+      faltantes: [{ clave: 'sin_procesar', titulo: 'Expediente aún no consultado', estado: 'pendiente' }],
+      zip_habilitado: false,
+      primer_aviso: {
+        mayor_de_edad: null,
+        ecuatoriano: true,
+        bachiller: false,
+        bachiller_detalle: 'Pendiente consulta',
+        apto_primera_instancia: false,
+      },
+    };
+  }
   const docs = (exp?.slots || []).filter(s => s.clave !== 'portada');
   const completos = docs.filter(s => s.estado === 'completo').length;
   const total = docs.length || 10;
@@ -653,11 +668,11 @@ export async function handleRequest(req, res) {
         return responderJson(res, 200, { ok: true, ecuadorApi, captcha });
       }
 
-      // 2. Listar postulantes y tabla de control (vista Ángel / Asesores)
+      // 2. Listar postulantes y tabla de control (Ángel ve todos; Asesores solo ven SUS propios estudiantes)
       if (req.method === 'GET' && pathname === '/api/rrhh/postulantes') {
         const postulantes = leerPostulantesCsv(DATA_DIR);
         const ultimos = leerUltimosExpedientes();
-        const lista = postulantes.map(p => {
+        let lista = postulantes.map(p => {
           const exp = ultimos[p.cedula] || null;
           const prog = exp?.progreso_10 || calcularResumenProgreso(exp);
           return {
@@ -670,7 +685,16 @@ export async function handleRequest(req, res) {
             progreso_10: prog,
           };
         });
-        return responderJson(res, 200, { ok: true, postulantes: lista });
+        if (usuarioAuth.rol !== 'coordinador') {
+          const miNombre = usuarioAuth.nombre.toLowerCase();
+          lista = lista.filter(p => (p.asesor || '').toLowerCase() === miNombre);
+        }
+        return responderJson(res, 200, {
+          ok: true,
+          rol: usuarioAuth.rol,
+          usuario: usuarioAuth.nombre,
+          postulantes: lista,
+        });
       }
 
       // 3. Armar expediente (valida cédula, consulta EcuadorAPI 1 vez, guarda archivos subidos y ejecuta procesar_lote.mjs)
@@ -794,9 +818,14 @@ export async function handleRequest(req, res) {
               // ignorar
             }
           }
+          const asesorPrevio = idRes.postulante.asesor || '';
+          const asesorFinal = body.asesor ||
+            (usuarioAuth.rol === 'asesor' && (!asesorPrevio || asesorPrevio.includes('RR. HH.') || asesorPrevio === 'Sin asignar')
+              ? usuarioAuth.nombre
+              : asesorPrevio || usuarioAuth.nombre);
           const metaActual = guardarPostulanteEnCsv(DATA_DIR, {
             cedula,
-            asesor: body.asesor || idRes.postulante.asesor || (usuarioAuth.rol === 'asesor' ? usuarioAuth.nombre : ''),
+            asesor: asesorFinal,
             nivel_curso: body.nivel_curso || idRes.postulante.nivel_curso || 'Nivel 1',
           });
           exp.asesor = metaActual.asesor || usuarioAuth.nombre;

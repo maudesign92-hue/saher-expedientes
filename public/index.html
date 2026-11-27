@@ -828,11 +828,26 @@
       }
     }
 
+    let usuarioActualObj = null;
+
     function actualizarUsuarioActual(usr, listaUsuarios = []) {
+      usuarioActualObj = usr;
       const pill = document.getElementById('usuario-actual-pill');
+      const tab2Btn = document.getElementById('tab-btn-postulantes');
+      const filtroAsesorWrap = document.getElementById('filtro-asesor-bd')?.parentElement;
+      const tituloTab2 = document.querySelector('#tab-postulantes h3');
       if (pill && usr) {
         const ico = usr.rol === 'coordinador' ? '🎓' : '👤';
         pill.textContent = `${ico} ${usr.nombre} (${usr.rol})`;
+      }
+      if (usr?.rol === 'coordinador') {
+        if (tab2Btn) tab2Btn.textContent = '2. Postulantes (Base Completa — Ángel)';
+        if (tituloTab2) tituloTab2.textContent = '🎓 Base de Datos Completa de Postulantes (Coordinador Académico)';
+        if (filtroAsesorWrap) filtroAsesorWrap.style.display = 'flex';
+      } else {
+        if (tab2Btn) tab2Btn.textContent = '2. Mis Estudiantes';
+        if (tituloTab2) tituloTab2.textContent = `👤 Mis Estudiantes (${usr?.nombre || 'Asesor'})`;
+        if (filtroAsesorWrap) filtroAsesorWrap.style.display = 'none';
       }
       const selAsesor = document.getElementById('filtro-asesor-bd');
       if (selAsesor && Array.isArray(listaUsuarios) && listaUsuarios.length) {

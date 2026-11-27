@@ -12,6 +12,7 @@ import path from 'node:path';
 export const USUARIOS_BASE = [
   { usuario: 'angel', pass: 'angel2026', nombre: 'Ángel (Coordinador Académico)', rol: 'coordinador' },
   { usuario: 'geovanna', pass: 'geovanna2026', nombre: 'Geovanna', rol: 'asesor' },
+  { usuario: 'nicole', pass: 'nicole2026', nombre: 'Nicole', rol: 'asesor' },
   { usuario: 'asesor1', pass: 'asesor2026', nombre: 'Asesor 1', rol: 'asesor' },
   { usuario: 'asesor2', pass: 'asesor2026', nombre: 'Asesor 2', rol: 'asesor' },
   { usuario: 'rrhh', pass: 'saher2026', nombre: 'RR. HH. / Administración', rol: 'coordinador' },
