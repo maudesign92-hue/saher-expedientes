@@ -420,6 +420,63 @@
       max-width: 390px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.4);
     }
+    /* TARJETAS UX/UI PROLIJAS PARA LOS 9 REQUISITOS (ALTERNADO ROJO PASTEL / NEGRO PASTEL) */
+    .req-cards-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      margin-top: 16px;
+    }
+    .req-card {
+      border-radius: 14px;
+      padding: 20px 24px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .req-card:hover {
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.11);
+    }
+    .req-card-red {
+      background: #fff5f6;
+      border: 2px solid #f5c2c7;
+      border-left: 9px solid var(--saher-red);
+    }
+    .req-card-black {
+      background: #f1f5f9;
+      border: 2px solid #cbd5e1;
+      border-left: 9px solid var(--saher-black);
+    }
+    .req-card-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1.5px dashed rgba(15, 23, 42, 0.15);
+    }
+    .req-num-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .req-card-red .req-num-pill {
+      background: var(--saher-red);
+      color: #fff;
+    }
+    .req-card-black .req-num-pill {
+      background: var(--saher-black);
+      color: var(--saher-gold);
+    }
   </style>
 </head>
 <body>
@@ -660,20 +717,11 @@
           <div id="boveda-certificados-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;"></div>
         </div>
 
-        <!-- TABLA DE LOS 11 DOCUMENTOS CON DESCARGA INDIVIDUAL 1 A 1 Y SUBIDA MANUAL POR ÍTEM -->
-        <h3 style="margin:18px 0 6px;color:var(--saher-black);text-transform:uppercase;font-size:0.95rem;letter-spacing:0.04em;">
-          📋 Lista de Certificados por Entidad (Descarga individual 1 a 1) y Exámenes de Subida Manual
+        <!-- LISTA DE LOS 9 REQUISITOS EN TARJETAS SEPARADAS (UX/UI PROLIJO) -->
+        <h3 style="margin:22px 0 8px;color:var(--saher-black);text-transform:uppercase;font-size:0.98rem;letter-spacing:0.05em;">
+          📋 Los 9 Requisitos Oficiales (Descarga individual 1 a 1, Resumen 2Captcha y Carga Manual)
         </h3>
-        <table>
-          <thead>
-            <tr>
-              <th style="width:36px;">#</th>
-              <th>Entidad / Certificado y Acciones Individuales (Descargar 1 a 1 o Subir PDF / DOC / Imagen)</th>
-              <th style="width:130px;">Estado</th>
-            </tr>
-          </thead>
-          <tbody id="res-tabla-docs"></tbody>
-        </table>
+        <div id="res-tabla-docs" class="req-cards-stack"></div>
 
         <!-- BOTONES GRANDES CENTRADOS AL FINAL DE LOS 9 REQUISITOS -->
         <div style="margin:26px auto;padding:22px;background:var(--saher-black);border:2px solid var(--saher-gold);border-radius:12px;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:18px;box-shadow:0 8px 24px rgba(0,0,0,0.22);">
@@ -1523,33 +1571,35 @@
       const slotsSolo10 = exp.slots.filter(s => s.clave !== 'portada');
       tbody.innerHTML = slotsSolo10.map((s, idx) => {
         const numReq = idx + 1;
+        const esPar = numReq % 2 === 0;
+        const cardClase = esPar ? 'req-card req-card-black' : 'req-card req-card-red';
 
         const portal = PORTALES_INFO[s.clave];
         const descManual = ITEMS_MANUALES[s.clave];
         const tieneArchivo = !!s.archivo;
 
         return `
-          <tr>
-            <td><b>${numReq}</b></td>
-            <td>
-              <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;">
-                <div>
-                  <strong>${s.titulo}</strong>
-                  ${portal ? `<span style="font-size:0.78rem;background:var(--saher-black);color:var(--saher-gold);padding:2px 8px;border-radius:5px;margin-left:6px;">${portal.entidad}</span>` : `<span style="font-size:0.78rem;background:var(--saher-red);color:#fff;padding:2px 8px;border-radius:5px;margin-left:6px;">Carga Manual RR. HH.</span>`}
-                </div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                  ${portal ? `
-                    <button class="btn btn-sm btn-black" onclick="descargarUnSoloPortal('${s.clave}', this)" title="Intenta descargar solo este certificado real desde el portal oficial">
-                      🤖 Descargar 1 a 1 del portal
-                    </button>
-                  ` : ''}
-                  ${tieneArchivo ? `
-                    <button class="btn btn-sm btn-gold" onclick="descargarArchivoIndividualExistente('${cedula}', '${s.archivo}')">
-                      ⬇ Descargar este certificado individual (${s.archivo})
-                    </button>
-                  ` : ''}
-                </div>
+          <div class="${cardClase}">
+            <div class="req-card-header">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+                <span class="req-num-pill">REQUISITO ${String(numReq).padStart(2, '0')}</span>
+                <strong style="font-size:1.08rem;color:var(--saher-black);">${s.titulo.replace(/^\d+\.\s*/, '')}</strong>
+                ${portal ? `<span style="font-size:0.78rem;background:var(--saher-black);color:var(--saher-gold);padding:3px 10px;border-radius:6px;font-weight:700;">${portal.entidad}</span>` : `<span style="font-size:0.78rem;background:var(--saher-red);color:#fff;padding:3px 10px;border-radius:6px;font-weight:700;">Carga Manual RR. HH.</span>`}
               </div>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                ${portal ? `
+                  <button class="btn btn-sm btn-black" onclick="descargarUnSoloPortal('${s.clave}', this)" title="Intenta descargar solo este certificado real desde el portal oficial">
+                    🤖 Descargar 1 a 1 del portal
+                  </button>
+                ` : ''}
+                ${tieneArchivo ? `
+                  <button class="btn btn-sm btn-gold" onclick="descargarArchivoIndividualExistente('${cedula}', '${s.archivo}')">
+                    ⬇ Descargar PDF (${s.archivo})
+                  </button>
+                ` : ''}
+                <span class="badge ${s.estado}" style="font-size:0.82rem;padding:5px 12px;">${s.estado}</span>
+              </div>
+            </div>
 
               ${s.archivo ? `<div style="font-size:0.83rem;color:var(--muted);margin-top:4px;">Archivo actual: <code>${s.archivo}</code>${s.fecha_emision ? ` · Emisión: ${s.fecha_emision}` : ''}${s.vence ? ` · Vence: ${s.vence}` : ''}</div>` : ''}
               ${s.verificacion ? `<div style="font-size:0.8rem;margin-top:4px;font-weight:700;color:${s.verificacion.valido ? 'var(--ok-txt)' : 'var(--pend-txt)'};">🛡️ Agente Verificador: ${s.verificacion.motivo}</div>` : ''}
@@ -1640,14 +1690,12 @@
                 </div>
               ` : ''}
             </td>
-            <td><span class="badge ${s.estado}">${s.estado}</span></td>
-          </tr>
+          </div>
         `;
       }).join('') + `
-        <tr style="background:#f8fafc;">
-          <td>—</td>
-          <td colspan="2" style="font-size:0.82rem;color:var(--muted);">ℹ️ <b>Portada e índice:</b> se generan automáticamente al compilar el PDF único del expediente.</td>
-        </tr>
+        <div style="padding:12px 16px;background:#f8fafc;border:1px dashed var(--border);border-radius:10px;font-size:0.83rem;color:var(--muted);">
+          ℹ️ <b>Portada e índice:</b> se generan automáticamente al compilar el PDF único del expediente.
+        </div>
       `;
     }
 
