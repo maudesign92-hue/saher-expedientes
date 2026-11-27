@@ -464,6 +464,23 @@
   </header>
 
   <div class="container">
+    <!-- BARRA RCI ESTILO MINDSUITE360 -->
+    <div style="background:var(--saher-black);color:var(--saher-white);border:1px solid var(--saher-gold);border-radius:10px;padding:12px 18px;margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;align-items:center;">
+      <div>
+        <div style="font-size:0.72rem;color:var(--saher-gold);font-weight:800;letter-spacing:0.12em;">SAHER · RCI CONFIANZA</div>
+        <div style="font-size:0.95rem;font-weight:800;">Información documental. Contexto. Criterio humano.</div>
+      </div>
+      <div style="font-size:0.8rem;border-left:2px solid var(--saher-red);padding-left:10px;">
+        <b style="color:var(--saher-gold);">01 / CONSULTA</b><br/>Fuentes oficiales del Estado + 2Captcha en vivo.
+      </div>
+      <div style="font-size:0.8rem;border-left:2px solid var(--saher-gold);padding-left:10px;">
+        <b style="color:var(--saher-gold);">02 / ORGANIZA</b><br/>Bóveda de PDFs 100% originales, .ZIP y PDF único.
+      </div>
+      <div style="font-size:0.8rem;border-left:2px solid #22c55e;padding-left:10px;">
+        <b style="color:#4ade80;">03 / REVISA (AGENTE)</b><br/>Verificación estricta: Cédula y Nombre deben coincidir.
+      </div>
+    </div>
+
     <div class="tabs">
       <button class="tab-btn active" id="tab-btn-armar" onclick="cambiarTab('armar')">1. Buscador y Armado de Expediente</button>
       <button class="tab-btn" id="tab-btn-postulantes" onclick="cambiarTab('postulantes')">2. Postulantes (Tabla de Control)</button>
@@ -524,6 +541,15 @@
           <div class="tot-card tot-completo" id="res-tot-completo">0 completos</div>
           <div class="tot-card tot-observacion" id="res-tot-obs">0 con observación</div>
           <div class="tot-card tot-pendiente" id="res-tot-pend">0 pendientes</div>
+        </div>
+
+        <!-- PANEL DEL AGENTE VERIFICADOR DE IDENTIDAD Y AUTENTICIDAD -->
+        <div id="agente-verificador-banner" style="margin:14px 0;padding:12px 16px;border-radius:8px;border:1.5px solid var(--saher-black);background:#f8fafc;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;">
+          <div>
+            <strong style="font-size:0.92rem;color:var(--saher-black);">🛡️ AGENTE VERIFICADOR DE IDENTIDAD Y AUTENTICIDAD (CERO FALSIFICACIÓN)</strong>
+            <div id="agente-verificador-detalle" style="font-size:0.83rem;color:var(--muted);margin-top:2px;">Analizando coincidencia de cédula, nombres y mayoría de edad...</div>
+          </div>
+          <span id="agente-verificador-badge" class="badge completo">VERIFICADO</span>
         </div>
 
         <!-- BÓVEDA DE CERTIFICADOS ORIGINALES INDIVIDUALES (SIN UNIR) Y DESCARGA EN .ZIP -->
@@ -608,7 +634,8 @@
       judiciales: {
         entidad: 'Función Judicial (e-SATJE)',
         url: 'https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros',
-        instruccion: 'Pegar cédula en "Demandado / Procesado" → BUSCAR → Imprimir (Ctrl+P) como PDF',
+        urlAlterno: 'https://consultas.funcionjudicial.gob.ec/informacionjudicialindividual/pages/index.jsf#!/',
+        instruccion: 'Pegar cédula en "Demandado / Procesado" (y luego en "Actor") → BUSCAR → Imprimir (Ctrl+P) como PDF',
       },
       no_ffaa: {
         entidad: 'Ministerio de Defensa (MIDENA)',
@@ -841,7 +868,23 @@
 
         // Descargar automáticamente a la PC el archivo PDF de este portal al hacer clic en el botón robot
         const slotDescargado = (data.expediente?.slots || []).find(s => s.clave === clavePortal);
-        if (slotDescargado?.archivo) {
+        const resPortal = data.descargaPortales?.resultados?.[clavePortal];
+        const msgRowEl = document.getElementById(`robot-msg-${clavePortal}`);
+        if (msgRowEl) {
+          msgRowEl.style.display = 'block';
+          if (resPortal?.ok) {
+            msgRowEl.style.background = '#e6f4ea';
+            msgRowEl.style.color = '#137333';
+            msgRowEl.style.borderColor = '#137333';
+            msgRowEl.innerHTML = `✅ <b>Descargado y Verificado:</b> ${resPortal.metodo || 'Certificado original del portal'}`;
+          } else {
+            msgRowEl.style.background = '#fef7e0';
+            msgRowEl.style.color = '#8a5a00';
+            msgRowEl.style.borderColor = '#d4af37';
+            msgRowEl.innerHTML = `ℹ️ <b>Respuesta del Agente:</b> ${resPortal?.motivo || 'Este portal requiere descarga manual con los botones Copiar & Pegar de abajo.'}`;
+          }
+        }
+        if (slotDescargado?.archivo && resPortal?.ok) {
           descargarArchivoIndividualExistente(cedula, slotDescargado.archivo, false);
         }
       } catch (err) {
@@ -984,6 +1027,25 @@
       document.getElementById('res-tot-obs').textContent = `${exp.totales['observación']} con observación`;
       document.getElementById('res-tot-pend').textContent = `${exp.totales.pendiente} pendientes`;
 
+      // Actualizar panel del Agente Verificador de Identidad y Requisito #1
+      const vGlob = exp.verificacion_global || {};
+      const detEl = document.getElementById('agente-verificador-detalle');
+      const badEl = document.getElementById('agente-verificador-badge');
+      const edadTxt = identidad?.edad_anos != null
+        ? `${identidad.edad_anos} años (${identidad.mayor_de_edad ? '✅ Mayor de edad — Req. #1 OK' : '⚠️ Menor de edad'})`
+        : 'Edad pendiente';
+      detEl.innerHTML = `<b>Requisito #1 (Ecuatoriano y Mayor de edad):</b> ${edadTxt} &nbsp;|&nbsp; <b>Documentos verificados:</b> ${vGlob.total_verificados || 0} OK, ${vGlob.total_alertas || 0} alertas.`;
+      if (vGlob.total_alertas > 0) {
+        badEl.className = 'badge pendiente';
+        badEl.textContent = `🚨 ${vGlob.total_alertas} ALERTA(S) DE IDENTIDAD`;
+      } else if ((vGlob.total_verificados || 0) > 0) {
+        badEl.className = 'badge completo';
+        badEl.textContent = '🛡️ IDENTIDAD VERIFICADA';
+      } else {
+        badEl.className = 'badge observación';
+        badEl.textContent = '⏳ SIN DOCUMENTOS AÚN';
+      }
+
       const ts = Date.now();
       let urlPdf = `${API_BASE}/api/rrhh/pdf/${cedula}?inline=1&t=${ts}`;
       let urlDescarga = `${API_BASE}/api/rrhh/pdf/${cedula}?t=${ts}`;
@@ -1075,7 +1137,9 @@
               </div>
 
               ${s.archivo ? `<div style="font-size:0.83rem;color:var(--muted);margin-top:4px;">Archivo actual: <code>${s.archivo}</code>${s.fecha_emision ? ` · Emisión: ${s.fecha_emision}` : ''}${s.vence ? ` · Vence: ${s.vence}` : ''}</div>` : ''}
+              ${s.verificacion ? `<div style="font-size:0.8rem;margin-top:4px;font-weight:700;color:${s.verificacion.valido ? 'var(--ok-txt)' : 'var(--pend-txt)'};">🛡️ Agente Verificador: ${s.verificacion.motivo}</div>` : ''}
               ${s.motivo ? `<div style="font-size:0.84rem;color:var(--pend-txt);margin-top:4px;font-weight:600;">${s.motivo}</div>` : ''}
+              <div id="robot-msg-${s.clave}" style="display:none;margin-top:6px;padding:7px 10px;border-radius:6px;border:1px solid;font-size:0.81rem;"></div>
 
               <!-- RECUADRO PARA SUBIR MANUALMENTE (PDF, DOC, DOCX, JPG, PNG, ARCHIVO) EN CADA ÍTEM -->
               <div class="upload-slot-box ${descManual ? 'manual-req' : ''}">
@@ -1102,7 +1166,10 @@
                 <div class="portal-helper" style="flex-direction:column;align-items:stretch;gap:8px;background:#f8fafc;border:1.5px solid var(--saher-black);padding:12px;">
                   <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding-bottom:8px;">
                     <strong style="color:var(--saher-black);font-size:0.84rem;">📋 DATOS LISTOS PARA COPIAR Y PEGAR EN ${portal.entidad.toUpperCase()}:</strong>
-                    <a class="btn btn-sm" href="${portal.url}" target="_blank" rel="noopener">🔗 Abrir Portal Oficial (${portal.entidad}) ↗</a>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                      <a class="btn btn-sm" href="${portal.url}" target="_blank" rel="noopener">🔗 Abrir Portal Oficial (${portal.entidad}) ↗</a>
+                      ${portal.urlAlterno ? `<a class="btn btn-sm btn-black" href="${portal.urlAlterno}" target="_blank" rel="noopener">🔗 Portal Información Judicial Individual ↗</a>` : ''}
+                    </div>
                   </div>
                   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;">
                     <div class="copy-pill" style="justify-content:space-between;padding:6px 10px;">

@@ -25,6 +25,7 @@ import {
   consultarSaldoCaptcha,
   descargarCertificadosOficiales,
 } from './codigo/descargar_portales.mjs';
+import { verificarDocumento } from './codigo/agente_verificador.mjs';
 import { crearArchivoZip } from './codigo/zip_util.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -302,7 +303,7 @@ function responderJson(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
-function validarYGuardarArchivosSubidos(cedula, archivos) {
+async function validarYGuardarArchivosSubidos(cedula, archivos, nombreEsperado = '') {
   const dirCedula = path.join(DATA_DIR, 'entrada', cedula);
   fs.mkdirSync(dirCedula, { recursive: true });
   const guardados = [];
@@ -311,45 +312,43 @@ function validarYGuardarArchivosSubidos(cedula, archivos) {
     const nombreOriginal = path.basename(String(arch.nombre || 'archivo.pdf')).replace(/[^a-zA-Z0-9._\- ()]/g, '_');
     const ext = (nombreOriginal.split('.').pop() || '').toLowerCase();
     const cleanB64 = String(arch.dataBase64 || '').replace(/^data:[^;]+;base64,/, '');
-    let buf = Buffer.from(cleanB64, 'base64');
+    const buf = Buffer.from(cleanB64, 'base64');
     if (buf.length > MAX_UPLOAD_BYTES) {
       throw new Error(`El archivo "${nombreOriginal}" supera el máximo de 10 MB`);
     }
 
-    const mapaSlot = {
-      antecedentes: 'antecedentes.pdf',
-      judiciales: 'judiciales.pdf',
-      no_ffaa: 'no_ffaa.pdf',
-      clts: 'tiempo_servicio.pdf',
-      servidor_publico: 'servidor_publico.pdf',
-      titulo_bachiller: 'titulo_bachiller.pdf',
-      psicologico: 'psicologo.pdf',
-      aptitud_fisica: 'aptitud_fisica.pdf',
-      toxicologico: 'toxicologico.pdf',
-      cedula: `cedula_${cedula}.${ext === 'png' ? 'png' : 'jpg'}`,
+    // Agente Verificador: impedir que se suba un PDF de otra persona / otra cédula
+    if (ext === 'pdf') {
+      const verif = await verificarDocumento({
+        buffer: buf,
+        nombreArchivo: nombreOriginal,
+        cedulaEsperada: cedula,
+        nombreEsperado,
+        slotClave: arch.slotClave || '',
+      });
+      if (!verif.valido) {
+        throw new Error(`Agente Verificador rechazó "${nombreOriginal}": ${verif.motivo}`);
+      }
+    }
+
+    const mapaBase = {
+      antecedentes: 'antecedentes',
+      judiciales: 'judiciales',
+      no_ffaa: 'no_ffaa',
+      clts: 'tiempo_servicio',
+      servidor_publico: 'servidor_publico',
+      titulo_bachiller: 'titulo_bachiller',
+      psicologico: 'psicologo',
+      aptitud_fisica: 'aptitud_fisica',
+      toxicologico: 'toxicologico',
+      incapacidad: 'incapacidad_civil',
+      cedula: `cedula_${cedula}`,
     };
 
     let nombreFinal = nombreOriginal;
-    if (arch.slotClave && mapaSlot[arch.slotClave]) {
-      nombreFinal = mapaSlot[arch.slotClave];
-      // Si se subió una imagen (JPG/PNG), Word (DOC/DOCX) u otro formato para un slot PDF, envolver en un PDF válido con la fecha de hoy y cédula para que se compile sin errores
-      if (ext !== 'pdf' && nombreFinal.endsWith('.pdf')) {
-        const hoyFmt = new Date().toISOString().slice(0, 10).split('-').reverse().join('/');
-        buf = crearPdfMinimoConTexto([
-          `SAHER SEGURIDAD PRIVADA - DOCUMENTO CARGADO POR ENLACE / MANUAL`,
-          `ARCHIVO ORIGINAL: ${nombreOriginal} (${ext.toUpperCase()})`,
-          `CEDULA DEL POSTULANTE: ${cedula}`,
-          `CATEGORIA: ${arch.slotClave.toUpperCase()}`,
-          `FECHA DE EMISION: ${hoyFmt}`,
-        ]);
-      } else if (arch.slotClave === 'cedula' && !['jpg', 'jpeg', 'png'].includes(ext)) {
-        // Si para el casillero de cédula subieron PDF o Word, guardar PNG válido de respaldo para el slot 11
-        nombreFinal = `cedula_${cedula}.png`;
-        buf = Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC',
-          'base64'
-        );
-      }
+    if (arch.slotClave && mapaBase[arch.slotClave]) {
+      // Conservar la extensión original (pdf, jpg, png, doc, docx) para que el .ZIP y las descargas individuales entreguen el archivo auténtico sin alterar
+      nombreFinal = `${mapaBase[arch.slotClave]}.${ext || 'pdf'}`;
     } else if (['jpg', 'jpeg', 'png'].includes(ext) && !/^cedula/i.test(nombreFinal)) {
       nombreFinal = `cedula_${cedula}.${ext === 'png' ? 'png' : 'jpg'}`;
     }
@@ -379,8 +378,7 @@ async function inicializarDatos() {
     }
     const refReal = path.join(__dirname, 'referencia', '1804625752_ZAVALA_GARCIA_DANIEL_ROBERTO.pdf');
     const destAnt = path.join(dir18, 'antecedentes.pdf');
-    const destPlantilla = path.join(__dirname, 'codigo', 'plantilla_interior.pdf');
-    if (fs.existsSync(refReal) && (!fs.existsSync(destAnt) || !fs.existsSync(destPlantilla))) {
+    if (fs.existsSync(refReal) && !fs.existsSync(destAnt)) {
       fs.mkdirSync(dir18, { recursive: true });
       const { PDFDocument } = await import('pdf-lib');
       const srcDoc = await PDFDocument.load(fs.readFileSync(refReal));
@@ -388,9 +386,7 @@ async function inicializarDatos() {
         const outDoc = await PDFDocument.create();
         const [p2] = await outDoc.copyPages(srcDoc, [1]);
         outDoc.addPage(p2);
-        const bytesP2 = Buffer.from(await outDoc.save());
-        if (!fs.existsSync(destAnt)) fs.writeFileSync(destAnt, bytesP2);
-        if (!fs.existsSync(destPlantilla)) fs.writeFileSync(destPlantilla, bytesP2);
+        fs.writeFileSync(destAnt, Buffer.from(await outDoc.save()));
       }
     }
   } catch {
@@ -482,8 +478,8 @@ export async function handleRequest(req, res) {
             error: 'Debes marcar la casilla de autorización de tratamiento de datos personales (LOPDP) antes de subir documentos.',
           });
         }
-        await obtenerIdentidadPorCedula(cedula, DATA_DIR);
-        validarYGuardarArchivosSubidos(cedula, body.archivos || []);
+        const idResSubir = await obtenerIdentidadPorCedula(cedula, DATA_DIR);
+        await validarYGuardarArchivosSubidos(cedula, body.archivos || [], idResSubir?.postulante?.nombre_completo || '');
         const lote = await procesarLote({ dataDir: DATA_DIR, cedulaFiltro: cedula });
         const exp = lote.expedientes[0];
         if (exp) guardarUltimoExpediente(cedula, exp);
@@ -538,9 +534,9 @@ export async function handleRequest(req, res) {
           return responderJson(res, 400, { ok: false, error: idRes.error });
         }
 
-        // Guardar archivos subidos si los hay
+        // Guardar archivos subidos si los hay (con Agente Verificador)
         if (Array.isArray(body.archivos) && body.archivos.length > 0) {
-          validarYGuardarArchivosSubidos(cedula, body.archivos);
+          await validarYGuardarArchivosSubidos(cedula, body.archivos, idRes.postulante.nombre_completo);
         }
 
         // Por defecto, al buscar una cédula se ejecutan los Agentes de los 6 portales oficiales para que sus certificados estén listos para ver y descargar
@@ -573,12 +569,64 @@ export async function handleRequest(req, res) {
         }
 
         if (exp) {
+          // Calcular edad y mayoría de edad (Requisito #1: Ser ecuatoriano y mayor de edad)
+          let edadAnos = null;
+          let mayorDeEdad = null;
+          const fnStr = String(idRes.postulante.fecha_nacimiento || '').trim();
+          const mFn = fnStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/) || fnStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (mFn) {
+            const dNac = mFn[1].length === 4
+              ? new Date(Number(mFn[1]), Number(mFn[2]) - 1, Number(mFn[3]))
+              : new Date(Number(mFn[3]), Number(mFn[2]) - 1, Number(mFn[1]));
+            if (!Number.isNaN(dNac.getTime())) {
+              const hoyD = new Date();
+              edadAnos = hoyD.getFullYear() - dNac.getFullYear() - ((hoyD.getMonth() < dNac.getMonth() || (hoyD.getMonth() === dNac.getMonth() && hoyD.getDate() < dNac.getDate())) ? 1 : 0);
+              mayorDeEdad = edadAnos >= 18;
+            }
+          }
+
           exp.identidad = {
             ...idRes.postulante,
             nombre_completo: idRes.postulante.nombre_completo || exp.postulante.nombre_completo || 'SIN NOMBRE REGISTRADO',
             fuente: 'fuente: EcuadorAPI, no oficial',
             desde_cache: idRes.desde_cache,
             gasto_usd: idRes.gasto_usd,
+            edad_anos: edadAnos,
+            mayor_de_edad: mayorDeEdad,
+            es_ecuatoriano: true,
+          };
+
+          // Ejecutar Agente Verificador sobre cada documento presente en el expediente
+          const dirEntradaVerif = path.join(DATA_DIR, 'entrada', cedula);
+          let totalVerificados = 0;
+          let totalAlertas = 0;
+          for (const s of exp.slots || []) {
+            if (s.clave === 'portada') continue;
+            if (s.archivo) {
+              const fp = path.join(dirEntradaVerif, s.archivo);
+              if (fs.existsSync(fp)) {
+                const vRes = await verificarDocumento({
+                  buffer: fs.readFileSync(fp),
+                  nombreArchivo: s.archivo,
+                  cedulaEsperada: cedula,
+                  nombreEsperado: exp.identidad.nombre_completo,
+                  slotClave: s.clave,
+                });
+                s.verificacion = vRes;
+                if (!vRes.valido || vRes.nivel === 'ALERTA_IDENTIDAD' || vRes.nivel === 'ALERTA_AUTENTICIDAD') {
+                  totalAlertas++;
+                  s.estado = 'observación';
+                  s.motivo = vRes.motivo;
+                } else {
+                  totalVerificados++;
+                }
+              }
+            }
+          }
+          exp.verificacion_global = {
+            total_verificados: totalVerificados,
+            total_alertas: totalAlertas,
+            estado: totalAlertas > 0 ? 'CON_ALERTAS' : (totalVerificados > 0 ? 'VERIFICADO' : 'PENDIENTE'),
           };
           guardarUltimoExpediente(cedula, exp);
         }
@@ -667,7 +715,15 @@ export async function handleRequest(req, res) {
           return responderJson(res, 404, { ok: false, error: 'Certificado individual no encontrado en la carpeta del postulante.' });
         }
         const ext = (archivoReq.split('.').pop() || '').toLowerCase();
-        const mime = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
+        const mimeMap = {
+          pdf: 'application/pdf',
+          png: 'image/png',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          doc: 'application/msword',
+          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        };
+        const mime = mimeMap[ext] || 'application/octet-stream';
         const esInline = urlObj.searchParams.get('inline') === '1';
         res.writeHead(200, {
           'Content-Type': mime,
