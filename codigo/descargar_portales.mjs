@@ -718,7 +718,29 @@ async function descargarTituloBachiller({ cedula, nombreCompleto, carpetaEntrada
     await page.click('#formBusqueda\\:clBuscar');
     await page.waitForTimeout(3500);
 
-    const pdfBuf = Buffer.from(await page.pdf({ format: 'A4', printBackground: true }));
+    // Si el postulante SÍ tiene título registrado, MinEduc muestra un botón/enlace para imprimir el certificado oficial PDF
+    let pdfBuf = null;
+    const btnImprimir = page.locator('a:has-text("Imprimir"), button:has-text("Imprimir"), input[value*="Imprimir"], a[id*="Imprimir"], a[id*="Certificado"]').first();
+    if (await btnImprimir.count() > 0) {
+      try {
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 8000 }),
+          btnImprimir.click(),
+        ]);
+        const streamPath = await download.path();
+        if (streamPath) {
+          const dlBuf = fs.readFileSync(streamPath);
+          if (dlBuf.slice(0, 5).toString('latin1') === '%PDF-') {
+            pdfBuf = dlBuf;
+          }
+        }
+      } catch {
+        // Si abrió en nueva pestaña o no disparó download, usar captura PDF de la página oficial
+      }
+    }
+    if (!pdfBuf) {
+      pdfBuf = Buffer.from(await page.pdf({ format: 'A4', printBackground: true }));
+    }
     const verif = await guardarSiVerificado({
       buffer: pdfBuf,
       destino,
