@@ -424,26 +424,34 @@
 </head>
 <body>
 
-  <!-- Login de RR. HH. -->
-  <div id="login-overlay" style="display:none;">
-    <div class="login-card">
-      <h2 style="margin-top:0;color:var(--saher-red);">SAHER — Acceso RR. HH.</h2>
-      <p style="color:var(--muted);font-size:0.9rem;">Ingresa con tu usuario y contraseña de Recursos Humanos.</p>
+  <!-- PANTALLA PRINCIPAL DE LOGIN SAHER -->
+  <div id="login-overlay" style="display:flex;background:radial-gradient(circle at top,#1f1f26 0%,#09090b 85%);">
+    <div class="login-card" style="border-top:5px solid var(--saher-red);border-bottom:3px solid var(--saher-gold);max-width:420px;">
+      <div style="text-align:center;margin-bottom:14px;">
+        <div class="eagle-badge" style="margin:0 auto 10px;width:64px;height:64px;">
+          <svg width="40" height="40" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 22C18 22 26 26 32 32C37 25 46 18 58 16C50 24 44 30 41 36C47 35 53 33 58 30C50 38 42 42 35 44L32 54L27 44C19 41 12 34 8 22Z" fill="#D4AF37"/>
+          </svg>
+        </div>
+        <div style="font-size:1.7rem;font-weight:900;letter-spacing:0.14em;color:var(--saher-red);line-height:1;">SAHER</div>
+        <div style="font-size:0.74rem;font-weight:800;letter-spacing:0.1em;color:var(--saher-black);margin-top:4px;">SISTEMA DE EXPEDIENTES Y CONFIANZA RCI</div>
+      </div>
+      <p style="color:var(--muted);font-size:0.86rem;text-align:center;margin-top:0;">Ingresa con tu usuario y contraseña de Coordinación Académica o Asesor.</p>
       <div class="field" style="margin-bottom:12px;">
-        <label>Usuario</label>
-        <input type="text" id="login-user" value="rrhh" />
+        <label for="login-user">Usuario</label>
+        <input type="text" id="login-user" placeholder="Ej. angel, geovanna, nicole..." onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()" />
       </div>
       <div class="field" style="margin-bottom:16px;">
-        <label>Contraseña</label>
-        <input type="password" id="login-pass" value="saher2026" />
+        <label for="login-pass">Contraseña</label>
+        <input type="password" id="login-pass" placeholder="Ingresa tu contraseña" onkeydown="if(event.key==='Enter') iniciarSesion()" />
       </div>
-      <button class="btn" style="width:100%;justify-content:center;" onclick="iniciarSesion()">Entrar al sistema</button>
+      <button class="btn" style="width:100%;justify-content:center;padding:12px;" onclick="iniciarSesion()">🔐 Ingresar al Sistema</button>
       <div id="login-err" class="msg-error"></div>
     </div>
   </div>
 
   <!-- CABECERA CON LÍNEA GRÁFICA SAHER (NEGRO, ROJO, DORADO Y BLANCO) -->
-  <header>
+  <header id="app-header" style="display:none;">
     <div class="brand-wrap">
       <div class="eagle-badge" title="SAHER Centro de Capacitación">
         <svg width="36" height="36" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -464,7 +472,7 @@
     </div>
   </header>
 
-  <div class="container">
+  <div class="container" id="app-container" style="display:none;">
     <!-- BARRA RCI ESTILO MINDSUITE360 -->
     <div style="background:var(--saher-black);color:var(--saher-white);border:1px solid var(--saher-gold);border-radius:10px;padding:12px 18px;margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;align-items:center;">
       <div>
@@ -783,18 +791,29 @@
     const API_BASE = location.protocol === 'file:' ? 'http://localhost:3000' : '';
 
     function obtenerTokenAuth() {
-      return localStorage.getItem('saher_rrhh_auth') || btoa('rrhh:saher2026');
+      return localStorage.getItem('saher_rrhh_auth') || '';
+    }
+
+    function mostrarSistemaPrincipal(visible) {
+      document.getElementById('login-overlay').style.display = visible ? 'none' : 'flex';
+      document.getElementById('app-header').style.display = visible ? 'flex' : 'none';
+      document.getElementById('app-container').style.display = visible ? 'block' : 'none';
     }
 
     async function apiFetch(url, options = {}) {
+      const tok = obtenerTokenAuth();
+      if (!tok) {
+        mostrarSistemaPrincipal(false);
+        throw new Error('CRED_INVALIDA');
+      }
       const headers = {
         'Content-Type': 'application/json',
-        'x-rrhh-auth': obtenerTokenAuth(),
+        'x-rrhh-auth': tok,
         ...(options.headers || {}),
       };
       const resp = await fetch(API_BASE + url, { ...options, headers });
       if (resp.status === 401) {
-        document.getElementById('login-overlay').style.display = 'flex';
+        mostrarSistemaPrincipal(false);
         throw new Error('CRED_INVALIDA');
       }
       return resp;
@@ -805,6 +824,11 @@
       const p = document.getElementById('login-pass').value;
       const el = document.getElementById('login-err');
       el.style.display = 'none';
+      if (!u || !p) {
+        el.textContent = 'Ingresa tu usuario y contraseña.';
+        el.style.display = 'block';
+        return;
+      }
       localStorage.setItem('saher_rrhh_auth', btoa(`${u}:${p}`));
       try {
         const [rSal, rYo] = await Promise.all([
@@ -814,15 +838,19 @@
         const d = await rSal.json();
         const dYo = await rYo.json();
         if (d.ok) {
-          document.getElementById('login-overlay').style.display = 'none';
+          mostrarSistemaPrincipal(true);
           actualizarBarraSaldos(d.ecuadorApi, d.captcha);
           if (dYo?.ok && dYo.usuario) {
             actualizarUsuarioActual(dYo.usuario, dYo.usuarios);
           }
+          cambiarTab('armar');
+          document.getElementById('resultado-card').style.display = 'none';
         }
       } catch (e) {
+        localStorage.removeItem('saher_rrhh_auth');
+        mostrarSistemaPrincipal(false);
         el.textContent = e.message === 'CRED_INVALIDA'
-          ? 'Usuario o contraseña incorrectos (ej: angel / angel2026, geovanna / geovanna2026).'
+          ? 'Usuario o contraseña incorrectos.'
           : 'No se pudo conectar con el servidor.';
         el.style.display = 'block';
       }
@@ -860,7 +888,10 @@
 
     function cerrarSesion() {
       localStorage.removeItem('saher_rrhh_auth');
-      document.getElementById('login-overlay').style.display = 'flex';
+      document.getElementById('login-user').value = '';
+      document.getElementById('login-pass').value = '';
+      document.getElementById('resultado-card').style.display = 'none';
+      mostrarSistemaPrincipal(false);
     }
 
     function actualizarBarraSaldos(ec, cap) {
@@ -1587,20 +1618,29 @@
       armarExpediente(true);
     }
 
-    // Inicializar al abrir
+    // Inicializar al abrir: siempre exige login si no hay sesión guardada válida
     (async () => {
+      if (!obtenerTokenAuth()) {
+        mostrarSistemaPrincipal(false);
+        return;
+      }
       try {
-        const r = await apiFetch('/api/rrhh/saldos');
+        const [r, rYo] = await Promise.all([
+          apiFetch('/api/rrhh/saldos'),
+          apiFetch('/api/rrhh/yo'),
+        ]);
         const d = await r.json();
+        const dYo = await rYo.json();
         if (d.ok) {
-          document.getElementById('login-overlay').style.display = 'none';
+          mostrarSistemaPrincipal(true);
           actualizarBarraSaldos(d.ecuadorApi, d.captcha);
-          document.getElementById('input-cedula').value = '0503693988';
-          await armarExpediente(true);
+          if (dYo?.ok && dYo.usuario) actualizarUsuarioActual(dYo.usuario, dYo.usuarios);
+          return;
         }
       } catch {
-        document.getElementById('login-overlay').style.display = 'flex';
+        localStorage.removeItem('saher_rrhh_auth');
       }
+      mostrarSistemaPrincipal(false);
     })();
   </script>
 </body>
