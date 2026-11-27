@@ -289,7 +289,7 @@ function calcularResumenProgreso(exp, dirEntradaCedula = null) {
   if (!exp || !Array.isArray(exp.slots)) {
     return {
       completos: 0,
-      total: 10,
+      total: 9,
       faltantes: [{ clave: 'sin_procesar', titulo: 'Expediente aún no consultado', estado: 'pendiente' }],
       zip_habilitado: false,
       primer_aviso: {
@@ -303,7 +303,7 @@ function calcularResumenProgreso(exp, dirEntradaCedula = null) {
   }
   const docs = (exp?.slots || []).filter(s => s.clave !== 'portada');
   const completos = docs.filter(s => s.estado === 'completo').length;
-  const total = docs.length || 10;
+  const total = docs.length || 9;
   const faltantes = docs.filter(s => s.estado !== 'completo').map(s => ({
     clave: s.clave,
     titulo: s.titulo,
@@ -331,7 +331,7 @@ function calcularResumenProgreso(exp, dirEntradaCedula = null) {
     completos,
     total,
     faltantes,
-    zip_habilitado: completos === total && total >= 10,
+    zip_habilitado: completos === total && total >= 9,
     primer_aviso: {
       mayor_de_edad: mayorDeEdad,
       ecuatoriano,
@@ -654,6 +654,7 @@ export async function handleRequest(req, res) {
           ultimos[cedula].asesor = actualizado.asesor;
           ultimos[cedula].nivel_curso = actualizado.nivel_curso;
           ultimos[cedula].aprobado_asesor = actualizado.aprobado_asesor;
+          if (body.estado_proceso) ultimos[cedula].estado_proceso = body.estado_proceso;
           guardarUltimoExpediente(cedula, ultimos[cedula]);
         }
         return responderJson(res, 200, { ok: true, postulante: actualizado });
