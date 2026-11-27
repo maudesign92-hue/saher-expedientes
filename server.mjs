@@ -25,12 +25,17 @@ import {
   consultarSaldoCaptcha,
   descargarCertificadosOficiales,
 } from './codigo/descargar_portales.mjs';
-import { verificarDocumento } from './codigo/agente_verificador.mjs';
+import { verificarDocumento, extraerTextoPdf, normalizarTexto } from './codigo/agente_verificador.mjs';
 import {
   ITEMS_CONFIANZA,
   calificarEvaluacionConfianza,
   generarPdfInformeConfianza,
 } from './codigo/evaluacion_confianza.mjs';
+import {
+  autenticarUsuario,
+  obtenerUsuarios,
+  agregarUsuarioAsesor,
+} from './codigo/usuarios.mjs';
 import { crearArchivoZip } from './codigo/zip_util.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -267,15 +272,59 @@ function verificarAuthRrhh(req) {
   if (auth.startsWith('Basic ')) {
     const decoded = Buffer.from(auth.slice(6), 'base64').toString('utf8');
     const [u, p] = decoded.split(':');
-    if (u === RRHH_USER && p === RRHH_PASS) return true;
+    const usr = autenticarUsuario(DATA_DIR, u, p);
+    if (usr) return usr;
   }
   const tokenHeader = req.headers['x-rrhh-auth'] || '';
   if (tokenHeader) {
     const decoded = Buffer.from(tokenHeader, 'base64').toString('utf8');
     const [u, p] = decoded.split(':');
-    if (u === RRHH_USER && p === RRHH_PASS) return true;
+    const usr = autenticarUsuario(DATA_DIR, u, p);
+    if (usr) return usr;
   }
-  return false;
+  return null;
+}
+
+function calcularResumenProgreso(exp, dirEntradaCedula = null) {
+  const docs = (exp?.slots || []).filter(s => s.clave !== 'portada');
+  const completos = docs.filter(s => s.estado === 'completo').length;
+  const total = docs.length || 10;
+  const faltantes = docs.filter(s => s.estado !== 'completo').map(s => ({
+    clave: s.clave,
+    titulo: s.titulo,
+    estado: s.estado,
+  }));
+
+  // Primer Aviso (3 puntos de primera instancia): Mayor de edad, Ecuatoriano, Bachiller
+  const mayorDeEdad = exp?.identidad?.mayor_de_edad ?? null;
+  const ecuatoriano = true;
+  const slotTitulo = docs.find(s => s.clave === 'titulo_bachiller');
+  let bachiller = slotTitulo?.estado === 'completo';
+  let bachillerDetalle = bachiller ? 'Título de bachiller registrado' : 'Pendiente verificación de título';
+  if (bachiller && dirEntradaCedula && slotTitulo?.archivo) {
+    const fpTit = path.join(dirEntradaCedula, slotTitulo.archivo);
+    if (fs.existsSync(fpTit) && fpTit.endsWith('.pdf')) {
+      const txt = exp._tituloTextoNorm || '';
+      if (txt.includes('NO CONSTA INFORMACION DE TITULOS DE BACHILLER')) {
+        bachiller = false;
+        bachillerDetalle = 'Sin título de bachiller registrado en MinEduc';
+      }
+    }
+  }
+
+  return {
+    completos,
+    total,
+    faltantes,
+    zip_habilitado: completos === total && total >= 10,
+    primer_aviso: {
+      mayor_de_edad: mayorDeEdad,
+      ecuatoriano,
+      bachiller,
+      bachiller_detalle: bachillerDetalle,
+      apto_primera_instancia: mayorDeEdad === true && ecuatoriano === true && bachiller === true,
+    },
+  };
 }
 
 function leerJsonBody(req, maxBytes = 25 * 1024 * 1024) {
@@ -509,6 +558,7 @@ export async function handleRequest(req, res) {
         const exp = lote.expedientes[0];
         if (exp) {
           exp.evaluacion_confianza = evalResult;
+          exp.progreso_10 = calcularResumenProgreso(exp, dirCedula);
           guardarUltimoExpediente(cedula, exp);
         }
         return responderJson(res, 200, {
@@ -541,10 +591,57 @@ export async function handleRequest(req, res) {
       }
     }
 
-    // ── ENDPOINTS DE RR. HH. (PROTEGIDOS CON USUARIO Y CONTRASEÑA) ──
+    // ── ENDPOINTS DE RR. HH. / ASESORES / COORDINADOR (PROTEGIDOS) ──
     if (pathname.startsWith('/api/rrhh/')) {
-      if (!pathname.startsWith('/api/rrhh/pdf/') && !pathname.startsWith('/api/rrhh/certificado/') && !pathname.startsWith('/api/rrhh/zip/') && !verificarAuthRrhh(req)) {
-        return responderJson(res, 401, { ok: false, error: 'Credenciales de Recursos Humanos inválidas.' });
+      const usuarioAuth = verificarAuthRrhh(req);
+      if (!pathname.startsWith('/api/rrhh/pdf/') && !pathname.startsWith('/api/rrhh/certificado/') && !pathname.startsWith('/api/rrhh/zip/') && !usuarioAuth) {
+        return responderJson(res, 401, { ok: false, error: 'Usuario o contraseña incorrectos.' });
+      }
+
+      // 0. Información del usuario autenticado y lista de asesores
+      if (req.method === 'GET' && pathname === '/api/rrhh/yo') {
+        const usuarios = obtenerUsuarios(DATA_DIR).map(u => ({
+          usuario: u.usuario,
+          nombre: u.nombre,
+          rol: u.rol,
+        }));
+        return responderJson(res, 200, {
+          ok: true,
+          usuario: { usuario: usuarioAuth.usuario, nombre: usuarioAuth.nombre, rol: usuarioAuth.rol },
+          usuarios,
+        });
+      }
+
+      // 0.B Crear/actualizar asesor (solo coordinador, ej. Ángel)
+      if (req.method === 'POST' && pathname === '/api/rrhh/usuarios') {
+        if (usuarioAuth.rol !== 'coordinador') {
+          return responderJson(res, 403, { ok: false, error: 'Solo el Coordinador Académico puede gestionar asesores.' });
+        }
+        const body = await leerJsonBody(req);
+        const creado = agregarUsuarioAsesor(DATA_DIR, body);
+        return responderJson(res, 200, { ok: true, usuario: creado });
+      }
+
+      // 0.C Actualizar asesor, nivel_curso o aprobación del asesor
+      if (req.method === 'POST' && pathname === '/api/rrhh/actualizar-meta') {
+        const body = await leerJsonBody(req);
+        const val = validarCedulaEcuatoriana(body.cedula);
+        if (!val.valida) return responderJson(res, 400, { ok: false, error: val.motivo });
+        const cedula = val.cedula;
+        const actualizado = guardarPostulanteEnCsv(DATA_DIR, {
+          cedula,
+          asesor: body.asesor,
+          nivel_curso: body.nivel_curso,
+          aprobado_asesor: body.aprobado_asesor,
+        });
+        const ultimos = leerUltimosExpedientes();
+        if (ultimos[cedula]) {
+          ultimos[cedula].asesor = actualizado.asesor;
+          ultimos[cedula].nivel_curso = actualizado.nivel_curso;
+          ultimos[cedula].aprobado_asesor = actualizado.aprobado_asesor;
+          guardarUltimoExpediente(cedula, ultimos[cedula]);
+        }
+        return responderJson(res, 200, { ok: true, postulante: actualizado });
       }
 
       // 1. Consultar saldos (EcuadorAPI + 2Captcha/CapSolver)
@@ -556,15 +653,23 @@ export async function handleRequest(req, res) {
         return responderJson(res, 200, { ok: true, ecuadorApi, captcha });
       }
 
-      // 2. Listar postulantes y tabla de control
+      // 2. Listar postulantes y tabla de control (vista Ángel / Asesores)
       if (req.method === 'GET' && pathname === '/api/rrhh/postulantes') {
         const postulantes = leerPostulantesCsv(DATA_DIR);
         const ultimos = leerUltimosExpedientes();
-        const lista = postulantes.map(p => ({
-          ...p,
-          nombre_completo: [p.apellidos, p.nombres].filter(Boolean).join(' '),
-          expediente: ultimos[p.cedula] || null,
-        }));
+        const lista = postulantes.map(p => {
+          const exp = ultimos[p.cedula] || null;
+          const prog = exp?.progreso_10 || calcularResumenProgreso(exp);
+          return {
+            ...p,
+            asesor: p.asesor || exp?.asesor || 'Sin asignar',
+            nivel_curso: p.nivel_curso || exp?.nivel_curso || 'Nivel 1',
+            aprobado_asesor: p.aprobado_asesor || exp?.aprobado_asesor || 'no',
+            nombre_completo: [p.apellidos, p.nombres].filter(Boolean).join(' '),
+            expediente: exp,
+            progreso_10: prog,
+          };
+        });
         return responderJson(res, 200, { ok: true, postulantes: lista });
       }
 
@@ -654,13 +759,17 @@ export async function handleRequest(req, res) {
             if (s.archivo) {
               const fp = path.join(dirEntradaVerif, s.archivo);
               if (fs.existsSync(fp)) {
+                const bufVerif = fs.readFileSync(fp);
                 const vRes = await verificarDocumento({
-                  buffer: fs.readFileSync(fp),
+                  buffer: bufVerif,
                   nombreArchivo: s.archivo,
                   cedulaEsperada: cedula,
                   nombreEsperado: exp.identidad.nombre_completo,
                   slotClave: s.clave,
                 });
+                if (s.clave === 'titulo_bachiller' && s.archivo.endsWith('.pdf')) {
+                  exp._tituloTextoNorm = normalizarTexto(await extraerTextoPdf(bufVerif));
+                }
                 s.verificacion = vRes;
                 if (!vRes.valido || vRes.nivel === 'ALERTA_IDENTIDAD' || vRes.nivel === 'ALERTA_AUTENTICIDAD') {
                   totalAlertas++;
@@ -685,6 +794,16 @@ export async function handleRequest(req, res) {
               // ignorar
             }
           }
+          const metaActual = guardarPostulanteEnCsv(DATA_DIR, {
+            cedula,
+            asesor: body.asesor || idRes.postulante.asesor || (usuarioAuth.rol === 'asesor' ? usuarioAuth.nombre : ''),
+            nivel_curso: body.nivel_curso || idRes.postulante.nivel_curso || 'Nivel 1',
+          });
+          exp.asesor = metaActual.asesor || usuarioAuth.nombre;
+          exp.nivel_curso = metaActual.nivel_curso || 'Nivel 1';
+          exp.aprobado_asesor = metaActual.aprobado_asesor || 'no';
+          exp.progreso_10 = calcularResumenProgreso(exp, dirEntradaVerif);
+          delete exp._tituloTextoNorm;
           guardarUltimoExpediente(cedula, exp);
         }
 
@@ -715,7 +834,7 @@ export async function handleRequest(req, res) {
             }
           }
         }
-        const zipBase64 = entradasParaZip.length
+        const zipBase64 = (exp?.progreso_10?.zip_habilitado && entradasParaZip.length)
           ? crearArchivoZip(entradasParaZip).toString('base64')
           : null;
 
@@ -791,9 +910,17 @@ export async function handleRequest(req, res) {
         return;
       }
 
-      // 5.B Descargar archivo .ZIP con TODOS los certificados originales individuales (sin unir en 1 PDF)
+      // 5.B Descargar archivo .ZIP con TODOS los certificados originales individuales (solo habilitado cuando está 10/10)
       if (req.method === 'GET' && pathname.startsWith('/api/rrhh/zip/')) {
         const cedula = pathname.split('/').pop().replace(/\D/g, '');
+        const ultimosZip = leerUltimosExpedientes();
+        const progZip = ultimosZip[cedula]?.progreso_10;
+        if (progZip && !progZip.zip_habilitado) {
+          return responderJson(res, 403, {
+            ok: false,
+            error: `El .ZIP solo se habilita cuando el estudiante tiene 10/10 requisitos completos (actual: ${progZip.completos}/${progZip.total}).`,
+          });
+        }
         const dirEntradaCedula = path.join(DATA_DIR, 'entrada', cedula);
         if (!cedula || !fs.existsSync(dirEntradaCedula)) {
           return responderJson(res, 404, { ok: false, error: 'No hay carpeta de certificados para esta cédula.' });

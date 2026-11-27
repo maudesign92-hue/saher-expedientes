@@ -457,6 +457,7 @@
       </div>
     </div>
     <div class="saldos-bar">
+      <div id="usuario-actual-pill" class="pill-saldo" style="border-color:#22c55e;">👤 —</div>
       <div id="saldo-ecuadorapi" class="pill-saldo">EcuadorAPI: consultando...</div>
       <div id="saldo-captcha" class="pill-saldo">2Captcha: consultando...</div>
       <button class="btn btn-sm btn-black" onclick="cerrarSesion()">Salir</button>
@@ -585,6 +586,33 @@
           </div>
         </div>
 
+        <!-- PRIMER AVISO: VALIDACIÓN DE PRIMERA INSTANCIA (MAYOR DE EDAD, ECUATORIANO, BACHILLER) -->
+        <div id="primer-aviso-card" style="margin:14px 0;padding:12px 16px;border-radius:8px;border:2px solid var(--saher-gold);background:#fffdf7;">
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+            <strong style="font-size:0.94rem;color:var(--saher-black);">🚦 PRIMER AVISO — VALIDACIÓN DE PRIMERA INSTANCIA (REQUISITOS BASE)</strong>
+            <span id="primer-aviso-badge" class="badge observación">—</span>
+          </div>
+          <div id="primer-aviso-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:0.84rem;"></div>
+        </div>
+
+        <!-- ASESOR A CARGO, NIVEL/CURSO Y PROGRESO 10/10 -->
+        <div style="margin:14px 0;padding:12px 16px;border-radius:8px;border:1px solid var(--border);background:#f8fafc;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
+          <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
+            <div><small style="color:var(--muted);display:block;font-weight:700;">ASESOR A CARGO</small><strong id="res-asesor">—</strong></div>
+            <div>
+              <small style="color:var(--muted);display:block;font-weight:700;">NIVEL / CURSO OFERTADO</small>
+              <select id="select-nivel-curso" onchange="guardarMetaEstudiante()" style="padding:5px 10px;border-radius:6px;border:1.5px solid var(--saher-black);font-weight:700;">
+                <option value="Nivel 1">Nivel 1 (Guardia Fijo)</option>
+                <option value="Nivel 2">Nivel 2 (Guardia con Arma)</option>
+                <option value="Reentrenamiento">Reentrenamiento</option>
+                <option value="Supervisor">Supervisor / Escolta</option>
+              </select>
+            </div>
+            <div><small style="color:var(--muted);display:block;font-weight:700;">PROGRESO REQUISITOS</small><strong id="res-progreso-10" style="color:var(--saher-red);">0 / 10</strong></div>
+          </div>
+          <button class="btn btn-sm btn-black" onclick="marcarAprobadoAsesor()">✅ Marcar Listo para Ángel (Coordinador)</button>
+        </div>
+
         <div class="totales-row">
           <div class="tot-card tot-completo" id="res-tot-completo">0 vigentes</div>
           <div class="tot-card tot-observacion" id="res-tot-obs">0 revisar</div>
@@ -620,7 +648,7 @@
                 Aquí se alojan todos los certificados originales emitidos por cada entidad. Puedes descargarlos de 1 en 1 o bajarlos todos juntos comprimidos en un solo archivo <b>.ZIP</b>.
               </div>
             </div>
-            <button class="btn btn-gold" onclick="descargarZipCertificadosIndividuales()">
+            <button class="btn btn-gold" id="btn-descargar-zip-boveda" onclick="descargarZipCertificadosIndividuales()">
               📦 Descargar Todos los Certificados Individuales (.ZIP)
             </button>
           </div>
@@ -655,26 +683,46 @@
       </div>
     </div>
 
-    <!-- PESTAÑA 2: TABLA DE CONTROL DE POSTULANTES -->
+    <!-- PESTAÑA 2: BASE DE DATOS DE ESTUDIANTES (VISTA COORDINADOR ÁNGEL / ASESORES) -->
     <div id="tab-postulantes" style="display:none;">
       <div class="card">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
+          <div>
+            <h3 style="margin:0;color:var(--saher-black);">🎓 Base de Datos de Estudiantes y Expedientes (Vista Coordinación Académica)</h3>
+            <div style="font-size:0.82rem;color:var(--muted);">Visualiza quién es el asesor a cargo, qué nivel le corresponde, cuántos requisitos lleva (ej. 9/10) y descarga el <b>.ZIP solo cuando esté 10/10</b>.</div>
+          </div>
+          <button class="btn btn-black" onclick="cargarPostulantes()">🔄 Actualizar base</button>
+        </div>
         <div class="form-row" style="margin-bottom:14px;">
           <div class="field">
             <label for="buscar-cedula">Buscar por cédula o nombre</label>
-            <input type="text" id="buscar-cedula" placeholder="Escribe la cédula o apellido..." oninput="filtrarTablaPostulantes()" />
+            <input type="text" id="buscar-cedula" placeholder="Ej. Katherine Moreira o 0503693988..." oninput="filtrarTablaPostulantes()" />
           </div>
-          <button class="btn btn-black" onclick="cargarPostulantes()">Actualizar tabla</button>
+          <div class="field" style="max-width:210px;">
+            <label for="filtro-estado-bd">Estado 10/10</label>
+            <select id="filtro-estado-bd" onchange="filtrarTablaPostulantes()" style="padding:10px;border:2px solid var(--border);border-radius:7px;font-weight:700;">
+              <option value="todos">Todos los aspirantes</option>
+              <option value="completos">✅ Solo Aprobados (10/10)</option>
+              <option value="incompletos">⏳ Incompletos (&lt; 10/10)</option>
+            </select>
+          </div>
+          <div class="field" style="max-width:210px;">
+            <label for="filtro-asesor-bd">Asesor a cargo</label>
+            <select id="filtro-asesor-bd" onchange="filtrarTablaPostulantes()" style="padding:10px;border:2px solid var(--border);border-radius:7px;font-weight:700;">
+              <option value="">Todos los asesores</option>
+            </select>
+          </div>
         </div>
         <table>
           <thead>
             <tr>
               <th>Cédula</th>
-              <th>Postulante</th>
-              <th>Fecha Nac.</th>
-              <th>Estado Civil</th>
-              <th>Completos</th>
-              <th>Obs. / Pendientes</th>
-              <th>Acciones</th>
+              <th>Estudiante / Aspirante</th>
+              <th>Asesor a Cargo</th>
+              <th>Nivel / Curso</th>
+              <th>1er Aviso</th>
+              <th>Progreso (X/10) y Faltantes</th>
+              <th>Acciones / .ZIP</th>
             </tr>
           </thead>
           <tbody id="tabla-postulantes-body"></tbody>
@@ -691,19 +739,19 @@
         instruccion: 'Ecuatoriano: SÍ → Cédula → motivo "Proceso de reclutamiento de personal" → Visualizar Certificado PDF',
       },
       judiciales: {
-        entidad: 'Función Judicial (e-SATJE)',
-        url: 'https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros',
-        urlAlterno: 'https://consultas.funcionjudicial.gob.ec/informacionjudicialindividual/pages/index.jsf#!/',
-        instruccion: 'Pegar cédula en "Demandado / Procesado" (y luego en "Actor") → BUSCAR → Imprimir (Ctrl+P) como PDF',
+        entidad: 'Función Judicial (SATJE)',
+        url: 'https://consultas.funcionjudicial.gob.ec/informacionjudicialindividual/pages/index.jsf#!/',
+        urlAlterno: 'https://procesosjudiciales.funcionjudicial.gob.ec/busqueda-filtros',
+        instruccion: 'Pegar cédula en Información Judicial Individual / "Demandado / Procesado" → BUSCAR → Imprimir (Ctrl+P) como PDF',
       },
       no_ffaa: {
         entidad: 'Ministerio de Defensa (MIDENA)',
-        url: 'https://sidehu.midena.gob.ec/certificados/nofa.action',
+        url: 'https://servicios.midena.gob.ec/EncuestaSiapfa/encuesta_certi.php',
         instruccion: 'Pegar cédula + texto de seguridad → Consultar → guardar certificado PDF real',
       },
       clts: {
-        entidad: 'Ministerio de Defensa (MIDENA CLTS)',
-        url: 'https://sidehu.midena.gob.ec/certificados/clts.action',
+        entidad: 'Ministerio de Defensa (MIDENA Exmiembros)',
+        url: 'https://servicios.midena.gob.ec/EncuestaSiapfa/encuesta_certi.php',
         instruccion: 'Pegar cédula + texto de seguridad → responder pregunta → guardar certificado PDF real',
       },
       servidor_publico: {
@@ -719,10 +767,11 @@
     };
 
     const ITEMS_MANUALES = {
-      psicologico: 'Subir manualmente el Test de Confianza Psicológico (PDF, DOC, DOCX o Imagen)',
-      aptitud_fisica: 'Subir manualmente el Certificado de Aptitud Física (PDF, DOC, DOCX o Imagen)',
-      toxicologico: 'Subir manualmente el Resultado del Examen Toxicológico (PDF, DOC, DOCX o Imagen)',
-      cedula: 'Subir manualmente la Foto o Escaneo de la Cédula de Identidad (JPG, PNG o PDF)',
+      aptitud_fisica: 'Subir Certificado de Aptitud Física (Centro de Salud Pública / Jhon Torres)',
+      psicologico: 'Subir Certificado de Prueba de Confianza (Gabriel Jerez / Evaluación IPIP-HEXACO)',
+      toxicologico: 'Subir Resultado de Examen Toxicológico (PDF, DOC, DOCX o Imagen)',
+      cedula: 'Subir Foto o Escaneo de la Cédula de Identidad (JPG, PNG o PDF)',
+      incapacidad: 'No tener incapacidad absoluta o relativa (Cód. Civil) — Subir respaldo si aplica',
     };
 
     let listaPostulantesCache = [];
@@ -758,17 +807,39 @@
       el.style.display = 'none';
       localStorage.setItem('saher_rrhh_auth', btoa(`${u}:${p}`));
       try {
-        const r = await apiFetch('/api/rrhh/saldos');
-        const d = await r.json();
+        const [rSal, rYo] = await Promise.all([
+          apiFetch('/api/rrhh/saldos'),
+          apiFetch('/api/rrhh/yo'),
+        ]);
+        const d = await rSal.json();
+        const dYo = await rYo.json();
         if (d.ok) {
           document.getElementById('login-overlay').style.display = 'none';
           actualizarBarraSaldos(d.ecuadorApi, d.captcha);
+          if (dYo?.ok && dYo.usuario) {
+            actualizarUsuarioActual(dYo.usuario, dYo.usuarios);
+          }
         }
       } catch (e) {
         el.textContent = e.message === 'CRED_INVALIDA'
-          ? 'Usuario o contraseña incorrectos (por defecto: rrhh / saher2026).'
+          ? 'Usuario o contraseña incorrectos (ej: angel / angel2026, geovanna / geovanna2026).'
           : 'No se pudo conectar con el servidor.';
         el.style.display = 'block';
+      }
+    }
+
+    function actualizarUsuarioActual(usr, listaUsuarios = []) {
+      const pill = document.getElementById('usuario-actual-pill');
+      if (pill && usr) {
+        const ico = usr.rol === 'coordinador' ? '🎓' : '👤';
+        pill.textContent = `${ico} ${usr.nombre} (${usr.rol})`;
+      }
+      const selAsesor = document.getElementById('filtro-asesor-bd');
+      if (selAsesor && Array.isArray(listaUsuarios) && listaUsuarios.length) {
+        const actual = selAsesor.value;
+        selAsesor.innerHTML = '<option value="">Todos los asesores</option>' +
+          listaUsuarios.map(u => `<option value="${u.nombre}">${u.nombre}</option>`).join('');
+        if (actual) selAsesor.value = actual;
       }
     }
 
@@ -1122,6 +1193,40 @@
       document.getElementById('res-fnac').textContent = fnac;
       document.getElementById('res-ecivil').textContent = ecivil;
 
+      // Primer Aviso (3 puntos base: Mayor de edad, Ecuatoriano, Bachiller)
+      const prog10 = exp.progreso_10 || { completos: 0, total: 10, zip_habilitado: false, primer_aviso: {} };
+      const pa = prog10.primer_aviso || {};
+      const mayorOk = identidad?.mayor_de_edad === true || pa.mayor_de_edad === true;
+      const ecuOk = pa.ecuatoriano !== false;
+      const bachOk = pa.bachiller === true;
+      const aptoBase = mayorOk && ecuOk && bachOk;
+      const paBadge = document.getElementById('primer-aviso-badge');
+      paBadge.className = `badge ${aptoBase ? 'completo' : 'observación'}`;
+      paBadge.textContent = aptoBase ? '✅ APTO EN 1RA INSTANCIA' : '⚠️ REVISAR 1ER AVISO';
+      document.getElementById('primer-aviso-grid').innerHTML = `
+        <div class="dato-box"><small>1. Mayor de edad</small><strong>${mayorOk ? `✅ Sí (${identidad?.edad_anos ?? '—'} años)` : `⚠️ ${identidad?.edad_anos != null ? identidad.edad_anos + ' años' : 'Por verificar'}`}</strong></div>
+        <div class="dato-box"><small>2. Nacionalidad</small><strong>${ecuOk ? '✅ Ecuatoriano (C.I. válida)' : '❌ No ecuatoriano'}</strong></div>
+        <div class="dato-box"><small>3. Título de Bachiller</small><strong>${bachOk ? '✅ Registrado (MinEduc/SENESCYT)' : `⚠️ ${pa.bachiller_detalle || 'Pendiente verificar'}`}</strong></div>
+      `;
+
+      // Asesor a cargo, Nivel/Curso y bloqueo .ZIP hasta 10/10
+      document.getElementById('res-asesor').textContent = exp.asesor || 'Sin asignar';
+      const selNivel = document.getElementById('select-nivel-curso');
+      if (selNivel && exp.nivel_curso) selNivel.value = exp.nivel_curso;
+      document.getElementById('res-progreso-10').textContent = `${prog10.completos} / ${prog10.total} requisitos`;
+
+      const zipOk = !!prog10.zip_habilitado;
+      const btnZip1 = document.getElementById('btn-descargar-zip');
+      const btnZip2 = document.getElementById('btn-descargar-zip-boveda');
+      [btnZip1, btnZip2].forEach(bz => {
+        if (!bz) return;
+        bz.disabled = !zipOk;
+        bz.style.opacity = zipOk ? '1' : '0.5';
+        bz.textContent = zipOk
+          ? '📦 Descargar Todos Individuales en .ZIP (10/10)'
+          : `🔒 .ZIP bloqueado (${prog10.completos}/${prog10.total} — faltan ${prog10.total - prog10.completos})`;
+      });
+
       document.getElementById('res-tot-completo').textContent = `${exp.totales.completo} vigentes`;
       document.getElementById('res-tot-obs').textContent = `${exp.totales['observación']} revisar`;
       document.getElementById('res-tot-pend').textContent = `${exp.totales.pendiente} pendientes`;
@@ -1385,6 +1490,25 @@
       if (tab === 'postulantes') cargarPostulantes();
     }
 
+    async function guardarMetaEstudiante(aprobadoAsesor = null) {
+      if (!expedienteActual) return;
+      const cedula = expedienteActual.postulante.cedula;
+      const nivel_curso = document.getElementById('select-nivel-curso')?.value || 'Nivel 1';
+      await apiFetch('/api/rrhh/actualizar-meta', {
+        method: 'POST',
+        body: JSON.stringify({
+          cedula,
+          nivel_curso,
+          ...(aprobadoAsesor ? { aprobado_asesor: aprobadoAsesor } : {}),
+        }),
+      });
+    }
+
+    async function marcarAprobadoAsesor() {
+      await guardarMetaEstudiante('si');
+      alert('✅ Aspirante marcado como listo y visible en la Base de Datos de Ángel (Coordinador Académico).');
+    }
+
     async function cargarPostulantes() {
       const resp = await apiFetch('/api/rrhh/postulantes');
       const data = await resp.json();
@@ -1396,26 +1520,46 @@
 
     function filtrarTablaPostulantes() {
       const q = document.getElementById('buscar-cedula').value.trim().toLowerCase();
-      const filtrados = listaPostulantesCache.filter(p =>
-        p.cedula.includes(q) || (p.nombre_completo || '').toLowerCase().includes(q)
-      );
+      const fEstado = document.getElementById('filtro-estado-bd')?.value || 'todos';
+      const fAsesor = document.getElementById('filtro-asesor-bd')?.value || '';
+
+      const filtrados = listaPostulantesCache.filter(p => {
+        const matchTexto = p.cedula.includes(q) || (p.nombre_completo || '').toLowerCase().includes(q) || (p.asesor || '').toLowerCase().includes(q);
+        if (!matchTexto) return false;
+        const prog = p.progreso_10 || { completos: 0, total: 10, zip_habilitado: false };
+        if (fEstado === 'completos' && !prog.zip_habilitado) return false;
+        if (fEstado === 'incompletos' && prog.zip_habilitado) return false;
+        if (fAsesor && (p.asesor || '') !== fAsesor) return false;
+        return true;
+      });
+
       const tbody = document.getElementById('tabla-postulantes-body');
       tbody.innerHTML = filtrados.map(p => {
-        const exp = p.expediente;
-        const comp = exp ? `${exp.totales.completo}/11` : 'Sin procesar';
-        const detalle = exp
-          ? `${exp.totales['observación']} obs. · ${exp.totales.pendiente} pend.`
-          : '—';
+        const prog = p.progreso_10 || { completos: 0, total: 10, faltantes: [], zip_habilitado: false, primer_aviso: {} };
+        const pa = prog.primer_aviso || {};
+        const avisoTxt = pa.apto_primera_instancia ? '✅ Apto base' : '⚠️ Revisar base';
+        const faltanTxt = (prog.faltantes || []).length
+          ? `<div style="font-size:0.76rem;color:var(--muted);margin-top:3px;">Falta: ${(prog.faltantes || []).map(f => f.titulo.split('(')[0].trim()).slice(0, 3).join(', ')}${prog.faltantes.length > 3 ? '...' : ''}</div>`
+          : '<div style="font-size:0.76rem;color:var(--ok-txt);font-weight:700;">100% Completo</div>';
+
         return `
           <tr>
             <td><b>${p.cedula}</b></td>
-            <td>${p.nombre_completo || '—'}</td>
-            <td>${p.fecha_nacimiento || '—'}</td>
-            <td>${p.estado_civil || '—'}</td>
-            <td><span class="badge ${exp?.totales?.completo === 11 ? 'completo' : 'observación'}">${comp}</span></td>
-            <td>${detalle}</td>
+            <td><strong>${p.nombre_completo || '—'}</strong><div style="font-size:0.76rem;color:var(--muted);">${p.fecha_nacimiento || ''}</div></td>
+            <td><span style="font-weight:700;color:var(--saher-black);">${p.asesor || 'Sin asignar'}</span></td>
+            <td><span class="badge observación">${p.nivel_curso || 'Nivel 1'}</span></td>
+            <td><span class="badge ${pa.apto_primera_instancia ? 'completo' : 'observación'}">${avisoTxt}</span></td>
             <td>
-              <button class="btn btn-sm" onclick="abrirPostulanteEnArmar('${p.cedula}')">Ver / Armar</button>
+              <span class="badge ${prog.zip_habilitado ? 'completo' : 'observación'}">${prog.completos} / ${prog.total}</span>
+              ${faltanTxt}
+            </td>
+            <td>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                <button class="btn btn-sm" onclick="abrirPostulanteEnArmar('${p.cedula}')">Ver</button>
+                ${prog.zip_habilitado
+                  ? `<a class="btn btn-sm btn-gold" href="${API_BASE}/api/rrhh/zip/${p.cedula}" target="_blank">📦 .ZIP</a>`
+                  : `<button class="btn btn-sm btn-sec" disabled style="opacity:0.5;" title="Solo disponible al 10/10">🔒 .ZIP (${prog.completos}/10)</button>`}
+              </div>
             </td>
           </tr>
         `;

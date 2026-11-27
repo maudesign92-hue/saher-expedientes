@@ -193,6 +193,7 @@ async function main() {
     'codigo/descargar_portales.mjs',
     'codigo/agente_verificador.mjs',
     'codigo/evaluacion_confianza.mjs',
+    'codigo/usuarios.mjs',
     'codigo/zip_util.mjs',
     'codigo/unir_pdf.py',
     'codigo/leeme.md',
