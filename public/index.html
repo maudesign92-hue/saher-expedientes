@@ -1764,7 +1764,11 @@
               <div id="robot-msg-${s.clave}" style="display:none;margin-top:6px;padding:7px 10px;border-radius:6px;border:1px solid;font-size:0.81rem;"></div>
 
               ${s.clave === 'cedula' ? `
-                <!-- REQUISITO 1: 2 RECUADROS PARA LADO 1 Y LADO 2 DE LA CÉDULA CON MEJORA ESCÁNER HD -->
+                <!-- REQUISITO 1: 2 RECUADROS PARA LADO 1 Y LADO 2 DE LA CÉDULA CON MEJORA ESCÁNER HD + LINK CANVA -->
+                <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;padding:8px 12px;background:#fff;border:1px solid var(--border);border-radius:10px;">
+                  <span style="font-size:0.8rem;color:var(--muted);font-weight:700;">✨ El sistema quita el fondo automáticamente a PNG. Si la foto es muy difícil, también puedes usar Canva:</span>
+                  <a class="btn btn-sm btn-black" href="https://www.canva.com/es_mx/funciones/quitar-fondo/" target="_blank" rel="noopener">🎨 Quitar fondo en Canva ↗</a>
+                </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:6px;">
                   <label style="border:2px dashed #e11d48;background:#fff;border-radius:16px;padding:18px 14px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
                     <span style="font-size:1.5rem;">🪪</span>
