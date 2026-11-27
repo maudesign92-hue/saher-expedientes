@@ -603,20 +603,11 @@
           <div id="primer-aviso-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:0.84rem;"></div>
         </div>
 
-        <!-- ASESOR A CARGO, NIVEL/CURSO Y PROGRESO 10/10 -->
+        <!-- ASESOR A CARGO Y PROGRESO 9/9 (LOS 9 DOCUMENTOS SON SIEMPRE REQUISITOS DE NIVEL 1) -->
         <div style="margin:14px 0;padding:12px 16px;border-radius:8px;border:1px solid var(--border);background:#f8fafc;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
-          <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
+          <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;">
             <div><small style="color:var(--muted);display:block;font-weight:700;">ASESOR A CARGO</small><strong id="res-asesor">—</strong></div>
-            <div>
-              <small style="color:var(--muted);display:block;font-weight:700;">NIVEL / CURSO OFERTADO</small>
-              <select id="select-nivel-curso" onchange="guardarMetaEstudiante()" style="padding:5px 10px;border-radius:6px;border:1.5px solid var(--saher-black);font-weight:700;">
-                <option value="Nivel 1">Nivel 1 (Guardia Fijo)</option>
-                <option value="Nivel 2">Nivel 2 (Guardia con Arma)</option>
-                <option value="Reentrenamiento">Reentrenamiento</option>
-                <option value="Supervisor">Supervisor / Escolta</option>
-              </select>
-            </div>
-            <div><small style="color:var(--muted);display:block;font-weight:700;">PROGRESO REQUISITOS</small><strong id="res-progreso-10" style="color:var(--saher-red);">0 / 10</strong></div>
+            <div><small style="color:var(--muted);display:block;font-weight:700;">PROGRESO REQUISITOS (NIVEL 1)</small><strong id="res-progreso-10" style="color:var(--saher-red);">0 / 9</strong></div>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
             <button class="btn btn-sm btn-black" onclick="guardarProcesoAsesor('en_proceso')">💾 Guardar Proceso (Reanudar luego)</button>
@@ -681,6 +672,56 @@
           <tbody id="res-tabla-docs"></tbody>
         </table>
 
+        <!-- MÓDULO COMERCIAL: CLASIFICACIÓN, VENTA, VIGENCIA 2 AÑOS Y FICHA DEL ESTUDIANTE -->
+        <div style="margin:22px 0;padding:16px;border-radius:10px;border:2px solid var(--saher-black);background:#f8fafc;">
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:12px;">
+            <div>
+              <strong style="font-size:0.98rem;color:var(--saher-black);">📊 CLASIFICACIÓN COMERCIAL, PAQUETE VENDIDO Y VIGENCIA (2 AÑOS)</strong>
+              <div style="font-size:0.81rem;color:var(--muted);">Registra el nivel actual, lo que se ofertó/vendió, el valor, la fecha del curso (vigencia automática de 2 años) y la ficha del estudiante para futuras ofertas.</div>
+            </div>
+            <span id="comercial-sugerencia-badge" class="badge completo">🎯 Perfila para ofertar: Nivel 2</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
+            <div class="field" style="min-width:160px;">
+              <label for="select-nivel-curso">Nivel Actual del Estudiante</label>
+              <select id="select-nivel-curso" onchange="guardarComercialEstudiante()" style="padding:9px;border-radius:6px;border:1.5px solid var(--saher-black);font-weight:700;">
+                <option value="Nivel 1">Nivel 1 (Guardia Fijo)</option>
+                <option value="Nivel 2">Nivel 2 (Guardia con Arma)</option>
+                <option value="Reentrenamiento">Reentrenamiento</option>
+                <option value="Especialización">Especialización</option>
+                <option value="Supervisor">Supervisor / Escolta</option>
+              </select>
+            </div>
+            <div class="field" style="min-width:210px;">
+              <label for="input-paquete-vendido">Paquete / Curso Ofertado o Vendido</label>
+              <input type="text" id="input-paquete-vendido" placeholder="Ej. Nivel 1 + Prueba de Confianza" style="padding:8px 10px;font-size:0.92rem;" />
+            </div>
+            <div class="field" style="min-width:130px;">
+              <label for="input-valor-venta">Valor ($ USD)</label>
+              <input type="text" id="input-valor-venta" placeholder="Ej. 150.00" style="padding:8px 10px;font-size:0.92rem;" />
+            </div>
+            <div class="field" style="min-width:170px;">
+              <label for="input-fecha-curso">Fecha Curso / Reentrenamiento</label>
+              <input type="date" id="input-fecha-curso" onchange="guardarComercialEstudiante()" style="padding:8px 10px;font-size:0.92rem;border:2px solid var(--border);border-radius:7px;" />
+            </div>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;">
+            <div id="comercial-vigencia-box" style="font-size:0.84rem;font-weight:700;padding:7px 12px;border-radius:6px;background:#fff;border:1px solid var(--border);">
+              📅 Vigencia de reentrenamiento (2 años): Sin fecha registrada.
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+              <label class="btn btn-sm btn-black" style="margin:0;">
+                📤 Subir Ficha del Estudiante
+                <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,*" style="display:none" onchange="subirFichaEstudiante(this)" />
+              </label>
+              <a id="btn-ver-ficha-estudiante" class="btn btn-sm btn-gold" href="#" target="_blank" style="display:none;">📄 Ver Ficha Guardada</a>
+              <button class="btn btn-sm" onclick="guardarComercialEstudiante(true)">💾 Guardar Datos Comerciales</button>
+            </div>
+          </div>
+        </div>
+
         <!-- VISOR EN VIVO DEL PDF ÚNICO COMPILADO -->
         <div style="margin: 24px 0 8px; border: 2px solid var(--saher-black); border-radius: 10px; overflow: hidden; background: var(--saher-black);">
           <div style="background: var(--saher-black); color: var(--saher-gold); padding: 12px 16px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 2px solid var(--saher-red);">
@@ -717,6 +758,16 @@
               <option value="incompletos">⏳ Incompletos (&lt; 10/10)</option>
             </select>
           </div>
+          <div class="field" style="max-width:220px;">
+            <label for="filtro-nivel-bd">Nivel / Oportunidad Comercial</label>
+            <select id="filtro-nivel-bd" onchange="filtrarTablaPostulantes()" style="padding:10px;border:2px solid var(--border);border-radius:7px;font-weight:700;">
+              <option value="">Todos los niveles</option>
+              <option value="Nivel 1">Nivel 1 → Ofertar Nivel 2</option>
+              <option value="Nivel 2">Nivel 2 → Ofertar Reentrenamiento</option>
+              <option value="CADUCADO">🚨 Reentrenamiento Caducado</option>
+              <option value="POR_CADUCAR">⚠️ Por Caducar (&le; 60 días)</option>
+            </select>
+          </div>
           <div class="field" style="max-width:210px;">
             <label for="filtro-asesor-bd">Asesor a cargo</label>
             <select id="filtro-asesor-bd" onchange="filtrarTablaPostulantes()" style="padding:10px;border:2px solid var(--border);border-radius:7px;font-weight:700;">
@@ -730,7 +781,7 @@
               <th>Cédula</th>
               <th>Estudiante / Aspirante</th>
               <th>Asesor a Cargo</th>
-              <th>Nivel / Curso</th>
+              <th>Nivel, Oferta y Vigencia (2 años)</th>
               <th>1er Aviso</th>
               <th>Progreso (X/10) y Faltantes</th>
               <th>Acciones / .ZIP</th>
@@ -1304,11 +1355,12 @@
         <div class="dato-box"><small>3. Título de Bachiller</small><strong>${bachOk ? '✅ Registrado (MinEduc/SENESCYT)' : `⚠️ ${pa.bachiller_detalle || 'Pendiente verificar'}`}</strong></div>
       `;
 
-      // Asesor a cargo, Nivel/Curso y bloqueo .ZIP hasta 10/10
+      // Asesor a cargo, Nivel/Curso, Comercial y bloqueo .ZIP hasta 9/9
       document.getElementById('res-asesor').textContent = exp.asesor || 'Sin asignar';
       const selNivel = document.getElementById('select-nivel-curso');
       if (selNivel && exp.nivel_curso) selNivel.value = exp.nivel_curso;
       document.getElementById('res-progreso-10').textContent = `${prog10.completos} / ${prog10.total} requisitos`;
+      actualizarVistaComercial(exp.comercial || {}, exp.nivel_curso || 'Nivel 1', cedula);
 
       const zipOk = !!prog10.zip_habilitado;
       const btnZip1 = document.getElementById('btn-descargar-zip');
@@ -1598,6 +1650,84 @@
       if (tab === 'postulantes') cargarPostulantes();
     }
 
+    function actualizarVistaComercial(com, nivel, cedula) {
+      document.getElementById('input-paquete-vendido').value = com.paquete_vendido || '';
+      document.getElementById('input-valor-venta').value = com.valor_venta || '';
+      document.getElementById('input-fecha-curso').value = com.fecha_curso || '';
+
+      const sugBadge = document.getElementById('comercial-sugerencia-badge');
+      sugBadge.textContent = `🎯 ${com.sugerencia_oferta || (/Nivel 2/i.test(nivel) ? 'Ofertar Reentrenamiento o Especialización' : 'Ofertar Nivel 2')}`;
+
+      const vigBox = document.getElementById('comercial-vigencia-box');
+      if (com.estado_vigencia === 'CADUCADO') {
+        vigBox.style.background = '#fce8e6';
+        vigBox.style.color = '#b31412';
+        vigBox.textContent = `🚨 CADUCADO (venció el ${com.fecha_vencimiento} hace ${Math.abs(com.dias_restantes)} días) — ¡Ofertar Reentrenamiento!`;
+      } else if (com.estado_vigencia === 'POR_CADUCAR') {
+        vigBox.style.background = '#fef7e0';
+        vigBox.style.color = '#8a5a00';
+        vigBox.textContent = `⚠️ POR CADUCAR (vence el ${com.fecha_vencimiento} · quedan ${com.dias_restantes} días)`;
+      } else if (com.estado_vigencia === 'VIGENTE') {
+        vigBox.style.background = '#e6f4ea';
+        vigBox.style.color = '#137333';
+        vigBox.textContent = `✅ VIGENTE 2 AÑOS (vence el ${com.fecha_vencimiento} · quedan ${com.dias_restantes} días)`;
+      } else {
+        vigBox.style.background = '#fff';
+        vigBox.style.color = '#5a5d65';
+        vigBox.textContent = '📅 Vigencia de reentrenamiento (2 años): Ingresa la fecha del curso.';
+      }
+
+      const btnFicha = document.getElementById('btn-ver-ficha-estudiante');
+      if (com.ficha_archivo) {
+        btnFicha.style.display = 'inline-flex';
+        btnFicha.href = `${API_BASE}/api/rrhh/certificado/${cedula}/${encodeURIComponent(com.ficha_archivo)}`;
+      } else {
+        btnFicha.style.display = 'none';
+      }
+    }
+
+    async function guardarComercialEstudiante(mostrarAlerta = false) {
+      if (!expedienteActual) return;
+      const cedula = expedienteActual.postulante.cedula;
+      const nivel_curso = document.getElementById('select-nivel-curso')?.value || 'Nivel 1';
+      const paquete_vendido = document.getElementById('input-paquete-vendido')?.value.trim() || '';
+      const valor_venta = document.getElementById('input-valor-venta')?.value.trim() || '';
+      const fecha_curso = document.getElementById('input-fecha-curso')?.value || '';
+      const resp = await apiFetch('/api/rrhh/actualizar-meta', {
+        method: 'POST',
+        body: JSON.stringify({ cedula, nivel_curso, paquete_vendido, valor_venta, fecha_curso }),
+      });
+      const data = await resp.json();
+      if (data.ok && data.comercial) {
+        expedienteActual.nivel_curso = nivel_curso;
+        expedienteActual.comercial = data.comercial;
+        actualizarVistaComercial(data.comercial, nivel_curso, cedula);
+        if (mostrarAlerta) alert('✅ Datos comerciales, paquete vendido y vigencia de 2 años guardados.');
+      }
+    }
+
+    async function subirFichaEstudiante(inputEl) {
+      const file = inputEl.files?.[0];
+      if (!file || !expedienteActual) return;
+      const cedula = expedienteActual.postulante.cedula;
+      const dataBase64 = await archivoABase64(file);
+      const resp = await apiFetch('/api/rrhh/actualizar-meta', {
+        method: 'POST',
+        body: JSON.stringify({
+          cedula,
+          fichaNombre: file.name,
+          fichaBase64: dataBase64,
+        }),
+      });
+      const data = await resp.json();
+      inputEl.value = '';
+      if (data.ok && data.comercial) {
+        expedienteActual.comercial = data.comercial;
+        actualizarVistaComercial(data.comercial, expedienteActual.nivel_curso, cedula);
+        alert('✅ Ficha del estudiante guardada en la base de datos.');
+      }
+    }
+
     async function guardarMetaEstudiante(aprobadoAsesor = null, estadoProceso = null) {
       if (!expedienteActual) return;
       const cedula = expedienteActual.postulante.cedula;
@@ -1635,33 +1765,51 @@
     function filtrarTablaPostulantes() {
       const q = document.getElementById('buscar-cedula').value.trim().toLowerCase();
       const fEstado = document.getElementById('filtro-estado-bd')?.value || 'todos';
+      const fNivel = document.getElementById('filtro-nivel-bd')?.value || '';
       const fAsesor = document.getElementById('filtro-asesor-bd')?.value || '';
 
       const filtrados = listaPostulantesCache.filter(p => {
-        const matchTexto = p.cedula.includes(q) || (p.nombre_completo || '').toLowerCase().includes(q) || (p.asesor || '').toLowerCase().includes(q);
+        const matchTexto = p.cedula.includes(q) || (p.nombre_completo || '').toLowerCase().includes(q) || (p.asesor || '').toLowerCase().includes(q) || (p.comercial?.paquete_vendido || '').toLowerCase().includes(q);
         if (!matchTexto) return false;
-        const prog = p.progreso_10 || { completos: 0, total: 10, zip_habilitado: false };
+        const prog = p.progreso_10 || { completos: 0, total: 9, zip_habilitado: false };
         if (fEstado === 'completos' && !prog.zip_habilitado) return false;
         if (fEstado === 'incompletos' && prog.zip_habilitado) return false;
+        if (fNivel === 'CADUCADO' && p.comercial?.estado_vigencia !== 'CADUCADO') return false;
+        else if (fNivel === 'POR_CADUCAR' && p.comercial?.estado_vigencia !== 'POR_CADUCAR') return false;
+        else if (fNivel && fNivel !== 'CADUCADO' && fNivel !== 'POR_CADUCAR' && (p.nivel_curso || 'Nivel 1') !== fNivel) return false;
         if (fAsesor && (p.asesor || '') !== fAsesor) return false;
         return true;
       });
 
       const tbody = document.getElementById('tabla-postulantes-body');
       tbody.innerHTML = filtrados.map(p => {
-        const prog = p.progreso_10 || { completos: 0, total: 10, faltantes: [], zip_habilitado: false, primer_aviso: {} };
+        const prog = p.progreso_10 || { completos: 0, total: 9, faltantes: [], zip_habilitado: false, primer_aviso: {} };
         const pa = prog.primer_aviso || {};
+        const com = p.comercial || {};
         const avisoTxt = pa.apto_primera_instancia ? '✅ Apto base' : '⚠️ Revisar base';
         const faltanTxt = (prog.faltantes || []).length
           ? `<div style="font-size:0.76rem;color:var(--muted);margin-top:3px;">Falta: ${(prog.faltantes || []).map(f => f.titulo.split('(')[0].trim()).slice(0, 3).join(', ')}${prog.faltantes.length > 3 ? '...' : ''}</div>`
           : '<div style="font-size:0.76rem;color:var(--ok-txt);font-weight:700;">100% Completo</div>';
+
+        const vigHtml = com.estado_vigencia === 'CADUCADO'
+          ? `<div style="font-size:0.74rem;color:#b31412;font-weight:800;">🚨 CADUCADO (${com.fecha_vencimiento})</div>`
+          : com.estado_vigencia === 'POR_CADUCAR'
+            ? `<div style="font-size:0.74rem;color:#8a5a00;font-weight:800;">⚠️ Vence ${com.fecha_vencimiento}</div>`
+            : com.estado_vigencia === 'VIGENTE'
+              ? `<div style="font-size:0.74rem;color:#137333;font-weight:700;">✅ Vigente hasta ${com.fecha_vencimiento}</div>`
+              : '';
 
         return `
           <tr>
             <td><b>${p.cedula}</b></td>
             <td><strong>${p.nombre_completo || '—'}</strong><div style="font-size:0.76rem;color:var(--muted);">${p.fecha_nacimiento || ''}</div></td>
             <td><span style="font-weight:700;color:var(--saher-black);">${p.asesor || 'Sin asignar'}</span></td>
-            <td><span class="badge observación">${p.nivel_curso || 'Nivel 1'}</span></td>
+            <td>
+              <span class="badge observación">${p.nivel_curso || 'Nivel 1'}</span>
+              <div style="font-size:0.74rem;color:#1d4ed8;font-weight:700;margin-top:3px;">🎯 ${com.sugerencia_oferta || 'Ofertar Nivel 2'}</div>
+              ${com.paquete_vendido ? `<div style="font-size:0.73rem;color:var(--muted);">Vendido: ${com.paquete_vendido} ${com.valor_venta ? '($' + com.valor_venta + ')' : ''}</div>` : ''}
+              ${vigHtml}
+            </td>
             <td><span class="badge ${pa.apto_primera_instancia ? 'completo' : 'observación'}">${avisoTxt}</span></td>
             <td>
               <span class="badge ${prog.zip_habilitado ? 'completo' : 'observación'}">${prog.completos} / ${prog.total}</span>
@@ -1670,6 +1818,7 @@
             <td>
               <div style="display:flex;flex-wrap:wrap;gap:6px;">
                 <button class="btn btn-sm" onclick="abrirPostulanteEnArmar('${p.cedula}')">▶ Reanudar</button>
+                ${com.ficha_archivo ? `<a class="btn btn-sm btn-black" href="${API_BASE}/api/rrhh/certificado/${p.cedula}/${encodeURIComponent(com.ficha_archivo)}" target="_blank">📄 Ficha</a>` : ''}
                 ${prog.zip_habilitado
                   ? `<a class="btn btn-sm btn-gold" href="${API_BASE}/api/rrhh/zip/${p.cedula}" target="_blank">📦 .ZIP</a>`
                   : `<button class="btn btn-sm btn-sec" disabled style="opacity:0.5;" title="Solo disponible al completar todos los requisitos">🔒 .ZIP (${prog.completos}/${prog.total})</button>`}

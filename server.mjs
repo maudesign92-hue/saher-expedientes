@@ -285,6 +285,29 @@ function verificarAuthRrhh(req) {
   return null;
 }
 
+function calcularVigenciaCurso(nivel = 'Nivel 1', fechaCurso = '') {
+  const n = String(nivel || 'Nivel 1');
+  let sugerencia_oferta = 'Ofertar Nivel 2';
+  if (/Nivel 2/i.test(n)) sugerencia_oferta = 'Ofertar Reentrenamiento o Especialización';
+  else if (/Reentrenamiento/i.test(n)) sugerencia_oferta = 'Renovación de Reentrenamiento / Especialización';
+  else if (/Especializaci|Supervisor/i.test(n)) sugerencia_oferta = 'Ofertar Reentrenamiento / Nuevo Nivel';
+
+  let estado_vigencia = 'SIN_FECHA';
+  let fecha_vencimiento = '';
+  let dias_restantes = null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(fechaCurso || '').trim())) {
+    const [y, m, d] = fechaCurso.split('-').map(Number);
+    const fVenc = new Date(Date.UTC(y + 2, m - 1, d, 12, 0, 0));
+    fecha_vencimiento = fVenc.toISOString().slice(0, 10);
+    const hoyUtc = new Date();
+    dias_restantes = Math.ceil((fVenc.getTime() - hoyUtc.getTime()) / 86400000);
+    if (dias_restantes < 0) estado_vigencia = 'CADUCADO';
+    else if (dias_restantes <= 60) estado_vigencia = 'POR_CADUCAR';
+    else estado_vigencia = 'VIGENTE';
+  }
+  return { sugerencia_oferta, fecha_vencimiento, estado_vigencia, dias_restantes };
+}
+
 function calcularResumenProgreso(exp, dirEntradaCedula = null) {
   if (!exp || !Array.isArray(exp.slots)) {
     return {
@@ -637,27 +660,50 @@ export async function handleRequest(req, res) {
         return responderJson(res, 200, { ok: true, usuario: creado });
       }
 
-      // 0.C Actualizar asesor, nivel_curso o aprobación del asesor
+      // 0.C Actualizar asesor, nivel_curso, venta/paquete, fecha_curso (vigencia 2 años) y ficha del estudiante
       if (req.method === 'POST' && pathname === '/api/rrhh/actualizar-meta') {
         const body = await leerJsonBody(req);
         const val = validarCedulaEcuatoriana(body.cedula);
         if (!val.valida) return responderJson(res, 400, { ok: false, error: val.motivo });
         const cedula = val.cedula;
+
+        let fichaArchivo = undefined;
+        if (body.fichaBase64 && body.fichaNombre) {
+          const dirCed = path.join(DATA_DIR, 'entrada', cedula);
+          fs.mkdirSync(dirCed, { recursive: true });
+          const ext = (String(body.fichaNombre).split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '');
+          fichaArchivo = `ficha_estudiante.${ext || 'pdf'}`;
+          const cleanB64 = String(body.fichaBase64).replace(/^data:[^;]+;base64,/, '');
+          fs.writeFileSync(path.join(dirCed, fichaArchivo), Buffer.from(cleanB64, 'base64'));
+        }
+
         const actualizado = guardarPostulanteEnCsv(DATA_DIR, {
           cedula,
           asesor: body.asesor,
           nivel_curso: body.nivel_curso,
           aprobado_asesor: body.aprobado_asesor,
+          paquete_vendido: body.paquete_vendido,
+          valor_venta: body.valor_venta,
+          fecha_curso: body.fecha_curso,
+          ficha_archivo: fichaArchivo,
         });
+        const comercial = {
+          paquete_vendido: actualizado.paquete_vendido || '',
+          valor_venta: actualizado.valor_venta || '',
+          fecha_curso: actualizado.fecha_curso || '',
+          ficha_archivo: actualizado.ficha_archivo || '',
+          ...calcularVigenciaCurso(actualizado.nivel_curso, actualizado.fecha_curso),
+        };
         const ultimos = leerUltimosExpedientes();
         if (ultimos[cedula]) {
           ultimos[cedula].asesor = actualizado.asesor;
           ultimos[cedula].nivel_curso = actualizado.nivel_curso;
           ultimos[cedula].aprobado_asesor = actualizado.aprobado_asesor;
+          ultimos[cedula].comercial = comercial;
           if (body.estado_proceso) ultimos[cedula].estado_proceso = body.estado_proceso;
           guardarUltimoExpediente(cedula, ultimos[cedula]);
         }
-        return responderJson(res, 200, { ok: true, postulante: actualizado });
+        return responderJson(res, 200, { ok: true, postulante: actualizado, comercial });
       }
 
       // 1. Consultar saldos (EcuadorAPI + 2Captcha/CapSolver)
@@ -676,11 +722,20 @@ export async function handleRequest(req, res) {
         let lista = postulantes.map(p => {
           const exp = ultimos[p.cedula] || null;
           const prog = exp?.progreso_10 || calcularResumenProgreso(exp);
+          const nivelAct = p.nivel_curso || exp?.nivel_curso || 'Nivel 1';
+          const fechaCursoAct = p.fecha_curso || exp?.comercial?.fecha_curso || '';
           return {
             ...p,
             asesor: p.asesor || exp?.asesor || 'Sin asignar',
-            nivel_curso: p.nivel_curso || exp?.nivel_curso || 'Nivel 1',
+            nivel_curso: nivelAct,
             aprobado_asesor: p.aprobado_asesor || exp?.aprobado_asesor || 'no',
+            comercial: {
+              paquete_vendido: p.paquete_vendido || exp?.comercial?.paquete_vendido || '',
+              valor_venta: p.valor_venta || exp?.comercial?.valor_venta || '',
+              fecha_curso: fechaCursoAct,
+              ficha_archivo: p.ficha_archivo || exp?.comercial?.ficha_archivo || '',
+              ...calcularVigenciaCurso(nivelAct, fechaCursoAct),
+            },
             nombre_completo: [p.apellidos, p.nombres].filter(Boolean).join(' '),
             expediente: exp,
             progreso_10: prog,
@@ -840,6 +895,13 @@ export async function handleRequest(req, res) {
           exp.asesor = metaActual.asesor || usuarioAuth.nombre;
           exp.nivel_curso = metaActual.nivel_curso || 'Nivel 1';
           exp.aprobado_asesor = metaActual.aprobado_asesor || 'no';
+          exp.comercial = {
+            paquete_vendido: metaActual.paquete_vendido || '',
+            valor_venta: metaActual.valor_venta || '',
+            fecha_curso: metaActual.fecha_curso || '',
+            ficha_archivo: metaActual.ficha_archivo || '',
+            ...calcularVigenciaCurso(exp.nivel_curso, metaActual.fecha_curso),
+          };
           exp.progreso_10 = calcularResumenProgreso(exp, dirEntradaVerif);
           delete exp._tituloTextoNorm;
           guardarUltimoExpediente(cedula, exp);

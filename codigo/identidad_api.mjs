@@ -115,11 +115,15 @@ export function guardarPostulanteEnCsv(dataDir, postulante) {
     asesor: postulante.asesor ?? actuales[idx]?.asesor ?? '',
     nivel_curso: postulante.nivel_curso ?? actuales[idx]?.nivel_curso ?? 'Nivel 1',
     aprobado_asesor: postulante.aprobado_asesor ?? actuales[idx]?.aprobado_asesor ?? 'no',
+    paquete_vendido: postulante.paquete_vendido ?? actuales[idx]?.paquete_vendido ?? '',
+    valor_venta: postulante.valor_venta ?? actuales[idx]?.valor_venta ?? '',
+    fecha_curso: postulante.fecha_curso ?? actuales[idx]?.fecha_curso ?? '',
+    ficha_archivo: postulante.ficha_archivo ?? actuales[idx]?.ficha_archivo ?? '',
   };
   if (idx >= 0) actuales[idx] = registro;
   else actuales.push(registro);
 
-  const header = 'cedula,apellidos,nombres,fecha_nacimiento,estado_civil,cedula_busqueda,contratado,fecha_registro,asesor,nivel_curso,aprobado_asesor';
+  const header = 'cedula,apellidos,nombres,fecha_nacimiento,estado_civil,cedula_busqueda,contratado,fecha_registro,asesor,nivel_curso,aprobado_asesor,paquete_vendido,valor_venta,fecha_curso,ficha_archivo';
   const esc = v => {
     const s = String(v ?? '');
     return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
@@ -137,6 +141,10 @@ export function guardarPostulanteEnCsv(dataDir, postulante) {
       r.asesor || '',
       r.nivel_curso || 'Nivel 1',
       r.aprobado_asesor || 'no',
+      r.paquete_vendido || '',
+      r.valor_venta || '',
+      r.fecha_curso || '',
+      r.ficha_archivo || '',
     ]
       .map(esc)
       .join(',')
