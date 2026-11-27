@@ -1073,13 +1073,13 @@
     }
 
     // Subir archivo manualmente en el recuadro de un ítem específico y recompilar el PDF único
-    // Motor de mejora tipo Escáner HD + Eliminación de fondo (BFS desde bordes -> PNG transparente) sin alterar datos
+    // Motor de mejora tipo Escáner HD: Balance de blancos automático (elimina tinte amarillo/beige/hueso) + Nitidez sin mutilar la cédula
     async function mejorarFotoComoEscaner(file) {
       const ext = (file.name.split('.').pop() || '').toLowerCase();
       if (ext === 'pdf' || ext === 'doc' || ext === 'docx') return await archivoABase64(file);
       try {
         const bmp = await createImageBitmap(file);
-        const targetW = Math.max(bmp.width, 1200);
+        const targetW = Math.min(2000, Math.max(bmp.width, 1400));
         const scale = Math.min(2.2, targetW / bmp.width);
         const w = Math.round(bmp.width * scale);
         const h = Math.round(bmp.height * scale);
@@ -1095,89 +1095,91 @@
         const imgData = ctx.getImageData(0, 0, w, h);
         const d = imgData.data;
 
-        // 1. Detectar color promedio del fondo en las 4 esquinas externas (mano, mesa, etc.)
-        const corners = [
-          [2, 2], [w - 3, 2], [2, h - 3], [w - 3, h - 3],
-        ];
-        let bgR = 0, bgG = 0, bgB = 0, cnt = 0;
-        for (const [cx, cy] of corners) {
-          for (let dy = -2; dy <= 2; dy++) {
-            for (let dx = -2; dx <= 2; dx++) {
-              const idx = ((Math.min(h - 1, Math.max(0, cy + dy)) * w) + Math.min(w - 1, Math.max(0, cx + dx))) * 4;
-              bgR += d[idx]; bgG += d[idx + 1]; bgB += d[idx + 2]; cnt++;
+        // 1. Histogramas por canal (R, G, B) en la zona central (donde está la cédula) para balance de blancos real
+        const histR = new Uint32Array(256);
+        const histG = new Uint32Array(256);
+        const histB = new Uint32Array(256);
+        const x0 = Math.floor(w * 0.08), x1 = Math.ceil(w * 0.92);
+        const y0 = Math.floor(h * 0.08), y1 = Math.ceil(h * 0.92);
+        let total = 0;
+        for (let y = y0; y < y1; y += 2) {
+          for (let x = x0; x < x1; x += 2) {
+            const idx = (y * w + x) * 4;
+            if (d[idx + 3] < 128) continue;
+            histR[d[idx]]++;
+            histG[d[idx + 1]]++;
+            histB[d[idx + 2]]++;
+            total++;
+          }
+        }
+
+        const pct = (hist, p) => {
+          const target = total * p;
+          let acc = 0;
+          for (let i = 0; i < 256; i++) {
+            acc += hist[i];
+            if (acc >= target) return i;
+          }
+          return 255;
+        };
+
+        if (total > 200) {
+          // Punto negro y punto blanco independientes por canal -> elimina tinte amarillo, beige o color hueso
+          const loR = Math.min(60, pct(histR, 0.015));
+          const loG = Math.min(60, pct(histG, 0.015));
+          const loB = Math.min(60, pct(histB, 0.015));
+
+          const hiR = Math.max(175, pct(histR, 0.975));
+          const hiG = Math.max(175, pct(histG, 0.975));
+          const hiB = Math.max(175, pct(histB, 0.975));
+
+          const fR = Math.min(1.65, 246 / Math.max(40, hiR - loR));
+          const fG = Math.min(1.65, 246 / Math.max(40, hiG - loG));
+          const fB = Math.min(1.65, 246 / Math.max(40, hiB - loB));
+
+          // Tablas LUT (0..255) para velocidad instantánea
+          const lutR = new Uint8ClampedArray(256);
+          const lutG = new Uint8ClampedArray(256);
+          const lutB = new Uint8ClampedArray(256);
+          for (let v = 0; v < 256; v++) {
+            // Normalización lineal + ligera mejora de claridad
+            const nr = Math.min(255, Math.max(0, (v - loR) * fR + 6));
+            const ng = Math.min(255, Math.max(0, (v - loG) * fG + 6));
+            const nb = Math.min(255, Math.max(0, (v - loB) * fB + 6));
+            lutR[v] = nr;
+            lutG[v] = ng;
+            lutB[v] = nb;
+          }
+
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] === 0) continue;
+            d[i] = lutR[d[i]];
+            d[i + 1] = lutG[d[i + 1]];
+            d[i + 2] = lutB[d[i + 2]];
+          }
+        }
+
+        // 2. Unsharp Mask suave (3x3) para dejar letras, foto y códigos súper nítidos sin artefactos
+        const src = new Uint8ClampedArray(d);
+        const stride = w * 4;
+        const amount = 0.42;
+        for (let y = 1; y < h - 1; y++) {
+          const row = y * stride;
+          for (let x = 1; x < w - 1; x++) {
+            const i = row + x * 4;
+            if (src[i + 3] < 128) continue;
+            for (let c = 0; c < 3; c++) {
+              const blur = (
+                src[i - stride - 4 + c] + src[i - stride + c] * 2 + src[i - stride + 4 + c] +
+                src[i - 4 + c] * 2 + src[i + c] * 4 + src[i + 4 + c] * 2 +
+                src[i + stride - 4 + c] + src[i + stride + c] * 2 + src[i + stride + 4 + c]
+              ) >> 4;
+              const sharp = src[i + c] + (src[i + c] - blur) * amount;
+              d[i + c] = sharp < 0 ? 0 : (sharp > 255 ? 255 : sharp);
             }
           }
         }
-        bgR /= cnt; bgG /= cnt; bgB /= cnt;
-        const bgLum = (bgR * 77 + bgG * 150 + bgB * 29) >> 8;
 
-        // 2. Flood-fill (BFS) desde los bordes exteriores para borrar solo el fondo conectado al exterior
-        // Nunca toca el rostro ni texto dentro de la cédula
-        const esFondo = (idx) => {
-          const r = d[idx], g = d[idx + 1], b = d[idx + 2];
-          const lum = (r * 77 + g * 150 + b * 29) >> 8;
-          const distBg = Math.hypot(r - bgR, g - bgG, b - bgB);
-          // Si la esquina es oscura/piel (lum < 210), borrar píxeles similares al fondo o mucho más oscuros que el plástico blanco de la cédula
-          if (bgLum < 215) {
-            return distBg < 72 || lum < 155;
-          }
-          return distBg < 35;
-        };
-
-        const visited = new Uint8Array(w * h);
-        const queue = new Int32Array(w * h);
-        let qHead = 0, qTail = 0;
-        const push = (x, y) => {
-          const p = y * w + x;
-          if (visited[p]) return;
-          if (esFondo(p * 4)) {
-            visited[p] = 1;
-            queue[qTail++] = p;
-          }
-        };
-        for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
-        for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
-
-        while (qHead < qTail) {
-          const p = queue[qHead++];
-          const x = p % w;
-          const y = (p - x) / w;
-          if (x > 0) push(x - 1, y);
-          if (x < w - 1) push(x + 1, y);
-          if (y > 0) push(x, y - 1);
-          if (y < h - 1) push(x, y + 1);
-        }
-
-        // Hacer transparente el fondo detectado
-        for (let p = 0; p < w * h; p++) {
-          if (visited[p]) {
-            d[p * 4 + 3] = 0;
-          }
-        }
-
-        // 3. Quitar neblina / mejorar contraste SOLO en los píxeles de la cédula (alpha > 0)
-        const hist = new Uint32Array(256);
-        let totalCard = 0;
-        for (let i = 0; i < d.length; i += 16) {
-          if (d[i + 3] === 0) continue;
-          const lum = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8;
-          hist[lum]++;
-          totalCard++;
-        }
-        if (totalCard > 100) {
-          let acc = 0, lo = 0, hi = 255;
-          for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= totalCard * 0.015) { lo = i; break; } }
-          acc = 0;
-          for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= totalCard * 0.015) { hi = i; break; } }
-          const range = Math.max(30, hi - lo);
-          const factor = 255 / range;
-          for (let i = 0; i < d.length; i += 4) {
-            if (d[i + 3] === 0) continue;
-            d[i] = Math.min(255, Math.max(0, (d[i] - lo) * factor));
-            d[i + 1] = Math.min(255, Math.max(0, (d[i + 1] - lo) * factor));
-            d[i + 2] = Math.min(255, Math.max(0, (d[i + 2] - lo) * factor));
-          }
-        }
         ctx.putImageData(imgData, 0, 0);
         return canvas.toDataURL('image/png');
       } catch {
@@ -1766,7 +1768,7 @@
               ${s.clave === 'cedula' ? `
                 <!-- REQUISITO 1: 2 RECUADROS PARA LADO 1 Y LADO 2 DE LA CÉDULA CON MEJORA ESCÁNER HD + LINK CANVA -->
                 <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;padding:8px 12px;background:#fff;border:1px solid var(--border);border-radius:10px;">
-                  <span style="font-size:0.8rem;color:var(--muted);font-weight:700;">✨ El sistema quita el fondo automáticamente a PNG. Si la foto es muy difícil, también puedes usar Canva:</span>
+                  <span style="font-size:0.8rem;color:var(--muted);font-weight:700;">✨ Ajuste automático de color (blanco natural) y nitidez HD. Si necesitas quitar el fondo, usa Canva:</span>
                   <a class="btn btn-sm btn-black" href="https://www.canva.com/es_mx/funciones/quitar-fondo/" target="_blank" rel="noopener">🎨 Quitar fondo en Canva ↗</a>
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:6px;">
