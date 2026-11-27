@@ -1423,6 +1423,14 @@
               ${s.archivo ? `<div style="font-size:0.83rem;color:var(--muted);margin-top:4px;">Archivo actual: <code>${s.archivo}</code>${s.fecha_emision ? ` · Emisión: ${s.fecha_emision}` : ''}${s.vence ? ` · Vence: ${s.vence}` : ''}</div>` : ''}
               ${s.verificacion ? `<div style="font-size:0.8rem;margin-top:4px;font-weight:700;color:${s.verificacion.valido ? 'var(--ok-txt)' : 'var(--pend-txt)'};">🛡️ Agente Verificador: ${s.verificacion.motivo}</div>` : ''}
               ${s.motivo ? `<div style="font-size:0.84rem;color:var(--pend-txt);margin-top:4px;font-weight:600;">${s.motivo}</div>` : ''}
+              ${exp.resumenes_portales?.[s.clave]?.texto ? `
+                <div style="margin-top:8px;padding:10px 12px;background:#fef08a;border:2px solid #ca8a04;border-radius:7px;color:#422006;font-size:0.84rem;line-height:1.45;">
+                  <div style="font-weight:900;text-transform:uppercase;font-size:0.75rem;letter-spacing:0.04em;margin-bottom:3px;">
+                    📋 RESUMEN EXTRAÍDO EN VIVO CON 2CAPTCHA (${exp.resumenes_portales[s.clave].fecha || 'Hoy'}):
+                  </div>
+                  <div style="font-weight:700;">${exp.resumenes_portales[s.clave].texto}</div>
+                </div>
+              ` : ''}
               <div id="robot-msg-${s.clave}" style="display:none;margin-top:6px;padding:7px 10px;border-radius:6px;border:1px solid;font-size:0.81rem;"></div>
 
               <!-- RECUADRO PARA SUBIR MANUALMENTE (PDF, DOC, DOCX, JPG, PNG, ARCHIVO) EN CADA ÍTEM -->

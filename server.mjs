@@ -818,6 +818,14 @@ export async function handleRequest(req, res) {
               // ignorar
             }
           }
+          const resPortalesPath = path.join(dirEntradaVerif, 'resumenes_portales.json');
+          if (fs.existsSync(resPortalesPath)) {
+            try {
+              exp.resumenes_portales = JSON.parse(fs.readFileSync(resPortalesPath, 'utf8'));
+            } catch {
+              // ignorar
+            }
+          }
           const asesorPrevio = idRes.postulante.asesor || '';
           const asesorFinal = body.asesor ||
             (usuarioAuth.rol === 'asesor' && (!asesorPrevio || asesorPrevio.includes('RR. HH.') || asesorPrevio === 'Sin asignar')

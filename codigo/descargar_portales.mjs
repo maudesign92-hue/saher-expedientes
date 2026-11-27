@@ -364,11 +364,15 @@ async function descargarMidenaNofa({ cedula, nombreCompleto, carpetaEntrada }) {
             nombreCompleto,
             slotClave: 'no_ffaa',
           });
+          const txtNofa = await (await import('./agente_verificador.mjs')).extraerTextoPdf(pdfBuf);
+          const esEx = /EX-CONSCRIPTO|SI REGISTRA|MILITAR/i.test(txtNofa) && !/NO REGISTRA DATOS COMO MILITAR/i.test(txtNofa);
           return {
             ok: true,
             archivo: 'no_ffaa.pdf',
             costo_usd: costoUsd,
             verificacion: verif,
+            califica: !esEx,
+            resumen_texto: `MIDENA NOFA (2Captcha OK): C.I. ${cedula} (${ent.nombre || nombreCompleto}). ${esEx ? 'Registra datos militares / ex-conscripto — revisar certificado.' : 'NO registra datos como miembro activo de FF.AA. ✅ CALIFICA.'}`,
             metodo: 'Descarga directa 100% oficial (MIDENA NOFA)',
           };
         }
@@ -456,6 +460,7 @@ async function descargarMidenaClts({ cedula, nombreCompleto, carpetaEntrada }) {
     }
     if (dBuscar.okResult?.entidad || dBuscar.okResult?.status === 'success') {
       const ent = dBuscar.okResult.entidad || {};
+      const resumenClts = `MIDENA Exmiembros / CLTS (2Captcha OK): C.I. ${ent.identidad || cedula} (${ent.nombre || nombreCompleto}). Fuerza: ${ent.fuerza || 'No registra datos militares'} · Grado: ${ent.grado || '—'} · Fecha baja: ${ent.fechaBajaFmt || 'Sin baja registrada'} · Clasificación: ${ent.clasificacion || 'Sin faltas'}. ${!ent.fechaBajaFmt ? '✅ CALIFICA (No registra baja por faltas).' : '⚠️ REVISAR motivo de baja en el portal.'}`;
       const rAct = await fetch('https://sidehu.midena.gob.ec/certificados/certificado/imprimir/actualizar.action', {
         method: 'POST',
         headers: {
@@ -544,8 +549,10 @@ async function descargarMidenaClts({ cedula, nombreCompleto, carpetaEntrada }) {
         ok: false,
         costo_usd: costoUsd,
         requiere_manual: true,
+        califica: !ent.fechaBajaFmt,
+        resumen_texto: resumenClts,
         motivo: dBuscar.okResult?.entidad?.activo
-          ? 'MIDENA CLTS: Ciudadano no registra datos como militar o requiere pregunta de seguridad en el portal.'
+          ? 'MIDENA CLTS consultado con 2Captcha. Revisa el resumen en amarillo abajo y sube captura/PDF si aplica.'
           : 'MIDENA CLTS requiere validación en portal.',
       };
     }
@@ -670,6 +677,8 @@ async function descargarMinisterioTrabajo({ cedula, nombreCompleto, fechaNacimie
         costo_usd: costoUsd,
         verificacion: verif,
         dependencia_sector_publico: !!infoObj.dependenciaLaboralSectorPublico,
+        califica: !infoObj.dependenciaLaboralSectorPublico,
+        resumen_texto: `Ministerio del Trabajo (2Captcha reCAPTCHA v3 OK): C.I. ${infoObj.identificacion} (${infoObj.nombres}). ${!infoObj.dependenciaLaboralSectorPublico ? 'NO mantiene relación de dependencia en el sector público. ✅ CALIFICA.' : `SÍ registra dependencia pública (${infoObj.razonSocial || 'Entidad'}). ⚠️ REVISAR.`}`,
         metodo: 'Descarga directa 100% oficial (Ministerio del Trabajo)',
       };
     }
@@ -691,11 +700,84 @@ async function descargarTituloBachiller({ cedula, nombreCompleto, carpetaEntrada
 
   const browser = await abrirNavegadorLocal();
   if (!browser) {
-    return {
-      ok: false,
-      requiere_manual: true,
-      motivo: 'Este portal requiere Chrome local (ejecuta el servidor en http://localhost:3000) o sube el PDF manualmente con Copiar & Pegar.',
-    };
+    // Fallback HTTP + 2Captcha (funciona en Vercel Serverless sin Chrome): extrae datos reales de MinEduc para el recuadro amarillo
+    let costoHttp = 0;
+    try {
+      const urlPortal = 'https://servicios.educacion.gob.ec/titulacion25-web/faces/paginas/consulta-titulos-refrendados.xhtml';
+      const jar = {};
+      const r0 = await fetch(urlPortal, { signal: AbortSignal.timeout(10000) });
+      let cookie = extraerCookies(r0, jar);
+      const html = await r0.text();
+      const vs = html.match(/name="javax\.faces\.ViewState"[^>]*value="([^"]+)"/)?.[1];
+
+      const f1 = new URLSearchParams({
+        'javax.faces.partial.ajax': 'true',
+        'javax.faces.source': 'formBusqueda:selecItem',
+        'javax.faces.partial.execute': 'formBusqueda:selecItem',
+        'javax.faces.partial.render': 'formBusqueda',
+        'javax.faces.behavior.event': 'change',
+        'org.richfaces.ajax.component': 'formBusqueda:selecItem',
+        formBusqueda: 'formBusqueda',
+        'formBusqueda:selecItem': '1',
+        'javax.faces.ViewState': vs,
+      });
+      const r1 = await fetch(urlPortal, {
+        method: 'POST',
+        headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Faces-Request': 'partial/ajax' },
+        body: f1.toString(),
+        signal: AbortSignal.timeout(10000),
+      });
+      cookie = extraerCookies(r1, jar);
+      const xml1 = await r1.text();
+      const vs1 = xml1.match(/<update id="javax\.faces\.ViewState"><!\[CDATA\[([^\]]+)\]\]>/)?.[1] || vs;
+      const imgSrc = xml1.match(/id="formBusqueda:capimg"[^>]*src="([^"]+)"/)?.[1] || html.match(/id="formBusqueda:capimg"[^>]*src="([^"]+)"/)?.[1];
+      const capUrl = new URL(imgSrc.replace('/titulacion25-web/titulacion25-web/..', '/titulacion25-web'), urlPortal).toString();
+      const capBuf = Buffer.from(await (await fetch(capUrl, { headers: { Cookie: cookie } })).arrayBuffer());
+      const sol = await resolverCaptchaImagen(capBuf.toString('base64'), 4, 6);
+      costoHttp += sol.costo_usd;
+
+      const f2 = new URLSearchParams({
+        'javax.faces.partial.ajax': 'true',
+        'javax.faces.source': 'formBusqueda:clBuscar',
+        'javax.faces.partial.execute': '@all',
+        'javax.faces.partial.render': 'formBusqueda',
+        'formBusqueda:clBuscar': 'formBusqueda:clBuscar',
+        formBusqueda: 'formBusqueda',
+        'formBusqueda:selecItem': '1',
+        'formBusqueda:cedula': cedula,
+        'formBusqueda:captcha': sol.texto.trim(),
+        'javax.faces.ViewState': vs1,
+      });
+      const r2 = await fetch(urlPortal, {
+        method: 'POST',
+        headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Faces-Request': 'partial/ajax' },
+        body: f2.toString(),
+        signal: AbortSignal.timeout(10000),
+      });
+      const xml2 = await r2.text();
+      const cleanTxt = xml2.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const sinTitulo = /No consta informaci[oó]n de t[ií]tulos de bachiller/i.test(cleanTxt);
+      const tieneInfo = /INFORMACI[OÓ]N PERSONAL/i.test(cleanTxt);
+      return {
+        ok: false,
+        costo_usd: costoHttp,
+        requiere_manual: true,
+        califica: tieneInfo && !sinTitulo,
+        resumen_texto: sinTitulo
+          ? `Ministerio de Educación (2Captcha OK): C.I. ${cedula} — No consta información de títulos de bachiller registrados. ⚠️ NO CALIFICA como bachiller.`
+          : tieneInfo
+            ? `Ministerio de Educación (2Captcha OK): ${cleanTxt.slice(cleanTxt.indexOf('INFORMACIÓN PERSONAL'), cleanTxt.indexOf('INFORMACIÓN PERSONAL') + 260)}. ✅ Registra información en MinEduc (descarga el PDF oficial en el portal).`
+            : `Ministerio de Educación consultado con 2Captcha. Verifica e imprime el PDF oficial en el portal.`,
+        motivo: 'Consulta previa realizada con 2Captcha. Revisa el recuadro amarillo abajo y adjunta el PDF oficial del portal.',
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        costo_usd: costoHttp,
+        requiere_manual: true,
+        motivo: `Ministerio de Educación: ${e.message}`,
+      };
+    }
   }
 
   let costoUsd = 0;
@@ -805,6 +887,10 @@ async function consultarProcesosJudicialesEnVivo({ cedula, nombreCompleto, carpe
     // continuar
   }
 
+  const resumenJudicial = Number.isFinite(causasDemandado)
+    ? `Función Judicial e-SATJE (en vivo): C.I. ${cedula} registra ${causasDemandado} causa(s) como Demandado/Procesado y ${causasActor ?? 0} como Actor/Ofendido. ${causasDemandado === 0 ? '✅ CALIFICA (0 causas como demandado).' : '⚠️ REVISAR detalle de causas en el portal.'}`
+    : 'Función Judicial e-SATJE: Consultar en el portal e imprimir respaldo.';
+
   // Intentar captura real de la página oficial e-SATJE con Chrome local
   const browser = await abrirNavegadorLocal();
   if (browser) {
@@ -835,6 +921,8 @@ async function consultarProcesosJudicialesEnVivo({ cedula, nombreCompleto, carpe
         causas_demandado: Number.isFinite(causasDemandado) ? causasDemandado : null,
         causas_actor: Number.isFinite(causasActor) ? causasActor : null,
         verificacion: verif,
+        califica: causasDemandado === 0,
+        resumen_texto: resumenJudicial,
         metodo: `Captura oficial e-SATJE (Demandado: ${causasDemandado ?? '?'} · Actor: ${causasActor ?? '?'})`,
       };
     } catch {
@@ -847,9 +935,11 @@ async function consultarProcesosJudicialesEnVivo({ cedula, nombreCompleto, carpe
     requiere_manual: true,
     causas_demandado: Number.isFinite(causasDemandado) ? causasDemandado : null,
     causas_actor: Number.isFinite(causasActor) ? causasActor : null,
+    califica: causasDemandado === 0,
+    resumen_texto: resumenJudicial,
     motivo:
       Number.isFinite(causasDemandado)
-        ? `Consulta en vivo e-SATJE: ${causasDemandado} causas como Demandado/Procesado y ${causasActor ?? 0} como Actor/Ofendido. Abre el portal con los botones Copiar & Pegar, imprime la consulta oficial y súbela aquí.`
+        ? `Consulta en vivo e-SATJE: ${causasDemandado} causas como Demandado/Procesado y ${causasActor ?? 0} como Actor/Ofendido. Revisa el recuadro amarillo abajo.`
         : 'e-SATJE no emite descarga automática de PDF; abre el portal con los datos Copiar & Pegar, imprime en PDF y súbelo aquí.',
   };
 }
@@ -986,10 +1076,32 @@ export async function descargarCertificadosOficiales({
 
   await Promise.all(tareas);
 
+  // Guardar resúmenes extraídos en resumenes_portales.json para mostrar en recuadro AMARILLO
+  const resPath = path.join(carpetaEntrada, 'resumenes_portales.json');
+  let resumenesGuardados = {};
+  if (fs.existsSync(resPath)) {
+    try {
+      resumenesGuardados = JSON.parse(fs.readFileSync(resPath, 'utf8'));
+    } catch {
+      resumenesGuardados = {};
+    }
+  }
+  for (const [k, v] of Object.entries(resultados)) {
+    if (v?.resumen_texto) {
+      resumenesGuardados[k] = {
+        texto: v.resumen_texto,
+        califica: v.califica ?? null,
+        fecha: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      };
+    }
+  }
+  fs.writeFileSync(resPath, JSON.stringify(resumenesGuardados, null, 2), 'utf8');
+
   return {
     cedula,
     gasto_captcha_usd: Number(gastoTotalUsd.toFixed(4)),
     bitacora,
     resultados,
+    resumenes_portales: resumenesGuardados,
   };
 }
