@@ -26,6 +26,11 @@ import {
   descargarCertificadosOficiales,
 } from './codigo/descargar_portales.mjs';
 import { verificarDocumento } from './codigo/agente_verificador.mjs';
+import {
+  ITEMS_CONFIANZA,
+  calificarEvaluacionConfianza,
+  generarPdfInformeConfianza,
+} from './codigo/evaluacion_confianza.mjs';
 import { crearArchivoZip } from './codigo/zip_util.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -467,6 +472,50 @@ export async function handleRequest(req, res) {
           expiraEn: infoEnlace.expiraEn,
           consentimientoAceptado: !!infoEnlace.consentimientoAceptado,
           expediente: exp,
+          itemsConfianza: ITEMS_CONFIANZA,
+        });
+      }
+
+      if (req.method === 'POST' && accion === 'evaluacion') {
+        const body = await leerJsonBody(req);
+        if (!body.consentimientoLopdp && !infoEnlace.consentimientoAceptado) {
+          return responderJson(res, 400, {
+            ok: false,
+            error: 'Debes aceptar el consentimiento informado (LOPDP) antes de enviar la evaluación.',
+          });
+        }
+        const idResEval = await obtenerIdentidadPorCedula(cedula, DATA_DIR);
+        const nombreEval = idResEval?.postulante?.nombre_completo || `POSTULANTE ${cedula}`;
+        const evalResult = calificarEvaluacionConfianza({
+          respuestas: body.respuestas,
+          tiemposMs: body.tiemposMs,
+          cambiosPestana: body.cambiosPestana,
+          fotosCapturadas: body.fotosCapturadas,
+          duracionTotalSeg: body.duracionTotalSeg,
+        });
+        const hoyFmt = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10).split('-').reverse().join('/');
+        const pdfBuf = await generarPdfInformeConfianza({
+          cedula,
+          nombreCompleto: nombreEval,
+          evaluacion: evalResult,
+          fechaHoy: hoyFmt,
+        });
+        const dirCedula = path.join(DATA_DIR, 'entrada', cedula);
+        fs.mkdirSync(dirCedula, { recursive: true });
+        fs.writeFileSync(path.join(dirCedula, 'psicologo.pdf'), pdfBuf);
+        fs.writeFileSync(path.join(dirCedula, 'evaluacion_confianza.json'), JSON.stringify(evalResult, null, 2), 'utf8');
+
+        const lote = await procesarLote({ dataDir: DATA_DIR, cedulaFiltro: cedula });
+        const exp = lote.expedientes[0];
+        if (exp) {
+          exp.evaluacion_confianza = evalResult;
+          guardarUltimoExpediente(cedula, exp);
+        }
+        return responderJson(res, 200, {
+          ok: true,
+          cedula,
+          evaluacion: evalResult,
+          expediente: exp,
         });
       }
 
@@ -628,6 +677,14 @@ export async function handleRequest(req, res) {
             total_alertas: totalAlertas,
             estado: totalAlertas > 0 ? 'CON_ALERTAS' : (totalVerificados > 0 ? 'VERIFICADO' : 'PENDIENTE'),
           };
+          const evalJsonPath = path.join(dirEntradaVerif, 'evaluacion_confianza.json');
+          if (fs.existsSync(evalJsonPath)) {
+            try {
+              exp.evaluacion_confianza = JSON.parse(fs.readFileSync(evalJsonPath, 'utf8'));
+            } catch {
+              // ignorar
+            }
+          }
           guardarUltimoExpediente(cedula, exp);
         }
 

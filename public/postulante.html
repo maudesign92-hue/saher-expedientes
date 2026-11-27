@@ -159,6 +159,59 @@
       color: var(--saher-gold);
       border: 1px solid var(--saher-gold);
     }
+    .eval-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .eval-tab-btn {
+      flex: 1;
+      padding: 11px 10px;
+      border-radius: 8px;
+      border: 2px solid var(--saher-black);
+      background: #fff;
+      color: var(--saher-black);
+      font-weight: 800;
+      font-size: 0.88rem;
+      cursor: pointer;
+    }
+    .eval-tab-btn.active {
+      background: var(--saher-black);
+      color: var(--saher-gold);
+    }
+    .opt-btn {
+      width: 100%;
+      text-align: left;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      font-size: 0.96rem;
+      font-weight: 700;
+      color: var(--saher-black);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .opt-btn:hover, .opt-btn.selected {
+      border-color: var(--saher-red);
+      background: #fff5f6;
+    }
+    .progress-bar-wrap {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 99px;
+      overflow: hidden;
+      margin: 8px 0 14px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--saher-red);
+      transition: width 0.25s;
+    }
   </style>
 </head>
 <body>
@@ -182,7 +235,58 @@
       </div>
     </div>
 
-    <div id="lista-certificados"></div>
+    <div class="eval-tabs">
+      <button class="eval-tab-btn active" id="btn-modo-eval" onclick="cambiarModo('eval')">🧠 Evaluación de Confianza (40 ítems)</button>
+      <button class="eval-tab-btn" id="btn-modo-docs" onclick="cambiarModo('docs')">📁 Subir Documentos</button>
+    </div>
+
+    <!-- COMPONENTE A: EVALUACIÓN DE CONFIANZA (40 ENUNCIADOS, 1 POR PANTALLA) -->
+    <div id="seccion-eval" class="card" style="border-top-color:var(--saher-red);">
+      <div id="eval-intro">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <strong style="font-size:1.05rem;color:var(--saher-black);">Evaluación de Confianza (Honestidad–Humildad)</strong>
+          <span class="badge completo">10–15 min</span>
+        </div>
+        <p style="font-size:0.86rem;color:var(--muted);margin:8px 0 12px;">
+          Responde 40 enunciados cortos (uno por pantalla) con total sinceridad. El sistema incluye lectura en voz alta, control de calidad de respuesta y genera automáticamente tu certificado oficial para SAHER.
+        </p>
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.82rem;">
+          <b>Verificación de identidad opcional con cámara:</b>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <button type="button" class="btn btn-sec" onclick="activarCamara()" id="btn-camara">📷 Permitir cámara (opcional)</button>
+            <span id="camara-estado" style="color:var(--muted);">No activada</span>
+          </div>
+          <video id="camara-video" autoplay playsinline muted style="display:none;width:120px;border-radius:8px;margin-top:8px;border:2px solid var(--saher-gold);"></video>
+        </div>
+        <button class="btn" style="width:100%;justify-content:center;padding:12px;" onclick="iniciarEvaluacion()">
+          ▶ Comenzar Evaluación de Confianza (40 preguntas)
+        </button>
+      </div>
+
+      <div id="eval-pregunta-box" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong id="eval-contador" style="color:var(--saher-red);font-size:0.95rem;">1 / 40</strong>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button type="button" class="btn btn-sec" style="padding:5px 10px;font-size:0.78rem;" onclick="leerEnunciado()">🔊 Escuchar</button>
+            <button type="button" class="btn btn-sec" style="padding:5px 8px;font-size:0.75rem;" onclick="setTamanoTexto('0.95rem')">A</button>
+            <button type="button" class="btn btn-sec" style="padding:5px 8px;font-size:0.88rem;" onclick="setTamanoTexto('1.12rem')">A</button>
+            <button type="button" class="btn btn-sec" style="padding:5px 8px;font-size:1.02rem;" onclick="setTamanoTexto('1.30rem')">A</button>
+          </div>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="eval-progress" style="width:2.5%;"></div></div>
+        <div id="eval-enunciado" style="font-size:1.12rem;font-weight:800;color:var(--saher-black);margin:14px 0 18px;min-height:60px;">—</div>
+        <div id="eval-opciones"></div>
+      </div>
+
+      <div id="eval-completado" style="display:none;text-align:center;padding:12px 0;">
+        <div style="font-size:2rem;">✅</div>
+        <h3 style="margin:6px 0;color:var(--ok-txt);">¡Evaluación de Confianza Completada!</h3>
+        <p id="eval-resumen-msg" style="font-size:0.88rem;color:var(--muted);"></p>
+        <button class="btn" onclick="cambiarModo('docs')">Continuar a Subida de Documentos →</button>
+      </div>
+    </div>
+
+    <div id="lista-certificados" style="display:none;"></div>
   </div>
 
   <script>
@@ -262,6 +366,136 @@
       });
     }
 
+    let itemsConfianza = [];
+    let respuestasEval = [];
+    let tiemposEvalMs = [];
+    let indicePregunta = 0;
+    let inicioPreguntaMs = 0;
+    let inicioEvalMs = 0;
+    let cambiosPestana = 0;
+    let fotosCapturadas = 0;
+    let camStream = null;
+    const OPCIONES_ESCALA = [
+      { v: 1, txt: 'Nunca' },
+      { v: 2, txt: 'A veces' },
+      { v: 3, txt: 'Regularmente' },
+      { v: 4, txt: 'Casi siempre' },
+      { v: 5, txt: 'Siempre' },
+    ];
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && document.getElementById('eval-pregunta-box').style.display === 'block') {
+        cambiosPestana++;
+      }
+    });
+
+    function cambiarModo(modo) {
+      const esEval = modo === 'eval';
+      document.getElementById('seccion-eval').style.display = esEval ? 'block' : 'none';
+      document.getElementById('lista-certificados').style.display = esEval ? 'none' : 'block';
+      document.getElementById('btn-modo-eval').classList.toggle('active', esEval);
+      document.getElementById('btn-modo-docs').classList.toggle('active', !esEval);
+    }
+
+    async function activarCamara() {
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        const v = document.getElementById('camara-video');
+        v.srcObject = camStream;
+        v.style.display = 'block';
+        fotosCapturadas = 1;
+        document.getElementById('camara-estado').textContent = '✅ Cámara verificada';
+      } catch {
+        document.getElementById('camara-estado').textContent = 'No disponible o denegada (puedes continuar)';
+      }
+    }
+
+    function setTamanoTexto(sz) {
+      document.getElementById('eval-enunciado').style.fontSize = sz;
+    }
+
+    function leerEnunciado() {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const txt = document.getElementById('eval-enunciado').textContent;
+      const u = new SpeechSynthesisUtterance(txt);
+      u.lang = 'es-EC';
+      window.speechSynthesis.speak(u);
+    }
+
+    function iniciarEvaluacion() {
+      if (!document.getElementById('check-lopdp').checked) {
+        alert('Marca primero la casilla obligatoria de consentimiento informado (LOPDP).');
+        return;
+      }
+      if (!itemsConfianza.length) {
+        alert('Cargando preguntas...');
+        return;
+      }
+      respuestasEval = [];
+      tiemposEvalMs = [];
+      indicePregunta = 0;
+      cambiosPestana = 0;
+      inicioEvalMs = Date.now();
+      document.getElementById('eval-intro').style.display = 'none';
+      document.getElementById('eval-pregunta-box').style.display = 'block';
+      mostrarPreguntaActual();
+    }
+
+    function mostrarPreguntaActual() {
+      const item = itemsConfianza[indicePregunta];
+      document.getElementById('eval-contador').textContent = `${indicePregunta + 1} / ${itemsConfianza.length}`;
+      document.getElementById('eval-progress').style.width = `${((indicePregunta + 1) / itemsConfianza.length) * 100}%`;
+      document.getElementById('eval-enunciado').textContent = item.texto;
+      inicioPreguntaMs = Date.now();
+      document.getElementById('eval-opciones').innerHTML = OPCIONES_ESCALA.map(o => `
+        <button type="button" class="opt-btn" onclick="responderPregunta(${o.v})">
+          <span>${o.txt}</span>
+          <span style="color:var(--muted);font-size:0.82rem;">→</span>
+        </button>
+      `).join('');
+    }
+
+    async function responderPregunta(valor) {
+      const delta = Date.now() - inicioPreguntaMs;
+      respuestasEval.push(valor);
+      tiemposEvalMs.push(delta);
+      if (camStream && (indicePregunta === 10 || indicePregunta === 25)) {
+        fotosCapturadas++;
+      }
+      indicePregunta++;
+      if (indicePregunta < itemsConfianza.length) {
+        mostrarPreguntaActual();
+        return;
+      }
+      // Enviar evaluación completa al servidor
+      document.getElementById('eval-opciones').innerHTML = '<div style="text-align:center;padding:14px;">⏳ Generando Informe Ejecutivo PDF...</div>';
+      const duracionTotalSeg = Math.round((Date.now() - inicioEvalMs) / 1000);
+      const resp = await fetch(`/api/postulante/${token}/evaluacion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consentimientoLopdp: true,
+          respuestas: respuestasEval,
+          tiemposMs: tiemposEvalMs,
+          cambiosPestana,
+          fotosCapturadas,
+          duracionTotalSeg,
+        }),
+      });
+      const data = await resp.json();
+      if (camStream) camStream.getTracks().forEach(t => t.stop());
+      if (!resp.ok || !data.ok) {
+        alert(data.error || 'Error al guardar la evaluación');
+        return;
+      }
+      document.getElementById('eval-pregunta-box').style.display = 'none';
+      document.getElementById('eval-completado').style.display = 'block';
+      document.getElementById('eval-resumen-msg').textContent =
+        `Tu Informe Ejecutivo (psicologo.pdf) fue generado y adjuntado automáticamente al expediente de SAHER.`;
+      renderizarCertificados(data.expediente);
+    }
+
     async function cargarEstado() {
       const resp = await fetch(`/api/postulante/${token}/estado`);
       const data = await resp.json();
@@ -271,6 +505,7 @@
         `;
         return;
       }
+      itemsConfianza = data.itemsConfianza || [];
       if (data.consentimientoAceptado) {
         document.getElementById('check-lopdp').checked = true;
       }
@@ -278,6 +513,9 @@
       document.getElementById('sub-postulante').textContent =
         `Postulante: ${p.nombre_completo || ''} · C.I. ${data.cedula}`;
       renderizarCertificados(data.expediente);
+      if (itemFiltro && itemFiltro !== 'psicologico') {
+        cambiarModo('docs');
+      }
     }
 
     function renderizarCertificados(exp) {

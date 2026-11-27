@@ -538,9 +538,10 @@
         </div>
 
         <div class="totales-row">
-          <div class="tot-card tot-completo" id="res-tot-completo">0 completos</div>
-          <div class="tot-card tot-observacion" id="res-tot-obs">0 con observación</div>
+          <div class="tot-card tot-completo" id="res-tot-completo">0 vigentes</div>
+          <div class="tot-card tot-observacion" id="res-tot-obs">0 revisar</div>
           <div class="tot-card tot-pendiente" id="res-tot-pend">0 pendientes</div>
+          <div class="tot-card" id="res-semaforo-riesgo" style="background:var(--saher-black);color:var(--saher-gold);border:1px solid var(--saher-gold);">SEMÁFORO: —</div>
         </div>
 
         <!-- PANEL DEL AGENTE VERIFICADOR DE IDENTIDAD Y AUTENTICIDAD -->
@@ -550,6 +551,16 @@
             <div id="agente-verificador-detalle" style="font-size:0.83rem;color:var(--muted);margin-top:2px;">Analizando coincidencia de cédula, nombres y mayoría de edad...</div>
           </div>
           <span id="agente-verificador-badge" class="badge completo">VERIFICADO</span>
+        </div>
+
+        <!-- COMPONENTE A: RESUMEN EVALUACIÓN DE CONFIANZA (HEXACO 40 ÍTEMS) -->
+        <div id="eval-confianza-card" style="display:none;margin:14px 0;padding:14px 16px;border-radius:8px;border:1.5px solid var(--saher-gold);background:#fffdf7;">
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+            <strong style="font-size:0.95rem;color:var(--saher-black);">🧠 COMPONENTE A · EVALUACIÓN DE CONFIANZA (IPIP-HEXACO 40 ÍTEMS)</strong>
+            <span id="eval-confianza-badge" class="badge completo">—</span>
+          </div>
+          <div id="eval-confianza-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;font-size:0.83rem;"></div>
+          <div id="eval-confianza-contraste" style="margin-top:8px;font-size:0.81rem;color:var(--muted);"></div>
         </div>
 
         <!-- BÓVEDA DE CERTIFICADOS ORIGINALES INDIVIDUALES (SIN UNIR) Y DESCARGA EN .ZIP -->
@@ -1023,9 +1034,24 @@
       document.getElementById('res-fnac').textContent = fnac;
       document.getElementById('res-ecivil').textContent = ecivil;
 
-      document.getElementById('res-tot-completo').textContent = `${exp.totales.completo} completos`;
-      document.getElementById('res-tot-obs').textContent = `${exp.totales['observación']} con observación`;
+      document.getElementById('res-tot-completo').textContent = `${exp.totales.completo} vigentes`;
+      document.getElementById('res-tot-obs').textContent = `${exp.totales['observación']} revisar`;
       document.getElementById('res-tot-pend').textContent = `${exp.totales.pendiente} pendientes`;
+      const semEl = document.getElementById('res-semaforo-riesgo');
+      const vGlobSem = exp.verificacion_global || {};
+      if (vGlobSem.total_alertas > 0) {
+        semEl.textContent = 'SEMÁFORO: RIESGO ALTO';
+        semEl.style.background = 'var(--saher-red)';
+        semEl.style.color = '#fff';
+      } else if (exp.totales.pendiente > 4) {
+        semEl.textContent = 'SEMÁFORO: RIESGO MEDIO';
+        semEl.style.background = '#fef7e0';
+        semEl.style.color = '#8a5a00';
+      } else {
+        semEl.textContent = 'SEMÁFORO: RIESGO BAJO';
+        semEl.style.background = '#e6f4ea';
+        semEl.style.color = '#137333';
+      }
 
       // Actualizar panel del Agente Verificador de Identidad y Requisito #1
       const vGlob = exp.verificacion_global || {};
@@ -1044,6 +1070,25 @@
       } else {
         badEl.className = 'badge observación';
         badEl.textContent = '⏳ SIN DOCUMENTOS AÚN';
+      }
+
+      // Mostrar resumen de Evaluación de Confianza (Componente A) si el postulante ya la completó
+      const evCard = document.getElementById('eval-confianza-card');
+      const ev = exp.evaluacion_confianza;
+      if (ev && ev.facetas) {
+        evCard.style.display = 'block';
+        document.getElementById('eval-confianza-badge').textContent = `${ev.puntaje_global.toFixed(2)} / 5 · ${ev.calidad?.estado || ''}`;
+        document.getElementById('eval-confianza-grid').innerHTML = `
+          <div class="dato-box"><small>Sinceridad</small><strong>${ev.facetas.sinceridad.toFixed(2)} / 5</strong></div>
+          <div class="dato-box"><small>Justicia y normas</small><strong>${ev.facetas.justicia.toFixed(2)} / 5</strong></div>
+          <div class="dato-box"><small>Evitación de codicia</small><strong>${ev.facetas.codicia.toFixed(2)} / 5</strong></div>
+          <div class="dato-box"><small>Modestia</small><strong>${ev.facetas.modestia.toFixed(2)} / 5</strong></div>
+          <div class="dato-box"><small>Calidad aplicación</small><strong>${ev.calidad?.estado || '—'} (${ev.calidad?.respuestas_apresuradas ?? 0} &lt;1.5s)</strong></div>
+        `;
+        document.getElementById('eval-confianza-contraste').innerHTML =
+          `<b>Fortaleza:</b> ${ev.fortaleza} · <b>Contrastar:</b> ${ev.aspecto_contraste}<br/><b>Preguntas sugeridas:</b> ${(ev.preguntas_contraste || []).join(' | ')}`;
+      } else {
+        evCard.style.display = 'none';
       }
 
       const ts = Date.now();

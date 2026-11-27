@@ -192,6 +192,7 @@ async function main() {
     'codigo/procesar_lote.mjs',
     'codigo/descargar_portales.mjs',
     'codigo/agente_verificador.mjs',
+    'codigo/evaluacion_confianza.mjs',
     'codigo/zip_util.mjs',
     'codigo/unir_pdf.py',
     'codigo/leeme.md',
